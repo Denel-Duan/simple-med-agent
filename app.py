@@ -94,8 +94,6 @@ st.markdown(
     --line:#e7ebf3;
     --text:#1f2937;
     --muted:#667085;
-    --brand:#2563eb;
-    --brand-soft:#eef4ff;
 }
 
 html, body, [class*="css"] {
@@ -166,7 +164,7 @@ section[data-testid="stSidebar"]{
     background: #fff;
     border: 1px solid var(--line);
     border-radius: 22px;
-    padding: 16px 16px;
+    padding: 16px;
     box-shadow: 0 4px 16px rgba(15,23,42,0.04);
     margin-bottom: 12px;
 }
@@ -199,12 +197,11 @@ div[data-testid="stMetric"]{
     padding:8px 10px;
 }
 
-/* ===== 右侧聊天面板 ===== */
 .agent-panel{
     background: linear-gradient(180deg, #f8f5f1 0%, #f5f1ec 100%);
     border: 1px solid #e8dfd7;
     border-radius: 24px;
-    padding: 16px 16px 14px 16px;
+    padding: 16px;
     box-shadow: 0 8px 28px rgba(15,23,42,0.05);
 }
 
@@ -249,15 +246,6 @@ div[data-testid="stMetric"]{
     padding: 10px;
 }
 
-div[data-testid="stChatMessage"]{
-    border-radius: 16px;
-    padding: 2px 2px;
-}
-
-div[data-testid="stChatMessageContent"]{
-    border-radius: 16px;
-}
-
 .stTextArea textarea{
     border-radius: 14px !important;
 }
@@ -289,7 +277,7 @@ for k, v in STATE_DEFAULTS.items():
 # =========================
 # 通用工具函数
 # =========================
-def queue_prompt(text: str):
+def queue_prompt(text: str) -> None:
     st.session_state.pending_prompt = text
     st.rerun()
 
@@ -317,7 +305,6 @@ def make_arrow_safe(df: pd.DataFrame) -> pd.DataFrame:
                         return None
                 except Exception:
                     pass
-
                 if isinstance(v, (dict, list, tuple, set)):
                     try:
                         return json.dumps(v, ensure_ascii=False)
@@ -330,7 +317,7 @@ def make_arrow_safe(df: pd.DataFrame) -> pd.DataFrame:
     return safe_df
 
 
-def safe_dataframe(df: pd.DataFrame, **kwargs):
+def safe_dataframe(df: pd.DataFrame, **kwargs) -> None:
     st.dataframe(make_arrow_safe(df), **kwargs)
 
 
@@ -342,13 +329,11 @@ def find_local_db_path() -> Optional[str]:
 
 
 def get_excel_sheet_names_from_bytes(file_bytes: bytes) -> List[str]:
-    xls = pd.ExcelFile(io.BytesIO(file_bytes))
-    return xls.sheet_names
+    return pd.ExcelFile(io.BytesIO(file_bytes)).sheet_names
 
 
 def get_excel_sheet_names_from_path(path: str) -> List[str]:
-    xls = pd.ExcelFile(path)
-    return xls.sheet_names
+    return pd.ExcelFile(path).sheet_names
 
 
 def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
@@ -482,7 +467,6 @@ def apply_dashboard_filters(
         out = out[out["EE_Percent"].fillna(-1e9) >= min_ee_percent]
 
     return out
-
 
 # =========================
 # Demo 公式 / 工具逻辑
@@ -931,7 +915,6 @@ def run_agent(user_text: str) -> Dict[str, Any]:
 
     return {"answer": "工具调用达到上限，本轮停止。", "tool_logs": tool_logs}
 
-
 # =========================
 # 聊天与工具结果渲染
 # =========================
@@ -945,7 +928,7 @@ def render_tool_result(tool_name: str, result: Dict[str, Any]):
     if tool_name == "search_knowledge":
         hits = result.get("hits", [])
         if hits:
-            st.markdown('<div class="tool-card"><div class="tool-title">本地知识命中</div>', unsafe_allow_html=True)
+            st.markdown("**本地知识命中**")
             for hit in hits:
                 st.markdown(
                     f"""
@@ -956,19 +939,9 @@ def render_tool_result(tool_name: str, result: Dict[str, Any]):
                     """,
                     unsafe_allow_html=True,
                 )
-            st.markdown("</div>", unsafe_allow_html=True)
 
     elif tool_name == "predict_formulation":
-        st.markdown(
-            """
-            <div style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:10px 12px;margin:8px 0 10px 0;">
-                <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#1f2937;">参数预测结果</div>
-                <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;margin-right:6px;">演示模型</span>
-                <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;">数值预测</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.markdown("**参数预测结果**")
         pred_df = pd.DataFrame(
             [
                 {
@@ -982,15 +955,7 @@ def render_tool_result(tool_name: str, result: Dict[str, Any]):
         safe_dataframe(pred_df, use_container_width=True)
 
     elif tool_name == "reverse_design":
-        st.markdown(
-            f"""
-            <div style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:10px 12px;margin:8px 0 10px 0;">
-                <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#1f2937;">逆向推荐结果</div>
-                <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;">目标 EE ≥ {result.get('目标最低包封率(%)','-')}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.markdown(f"**逆向推荐结果**（目标 EE ≥ {result.get('目标最低包封率(%)','-')}）")
         candidates = result.get("candidates", [])
         if candidates:
             safe_dataframe(pd.DataFrame(candidates), use_container_width=True)
@@ -999,16 +964,7 @@ def render_tool_result(tool_name: str, result: Dict[str, Any]):
         if "error" in result:
             st.error(result["error"])
         else:
-            st.markdown(
-                f"""
-                <div style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:10px 12px;margin:8px 0 10px 0;">
-                    <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#1f2937;">数据库筛选结果</div>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;margin-right:6px;">匹配 {result.get('matched_count',0)} 条</span>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;">展示 {result.get('preview_count',0)} 条</span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.markdown(f"**数据库筛选结果**：匹配 {result.get('matched_count',0)} 条，展示 {result.get('preview_count',0)} 条")
             records = result.get("records", [])
             if records:
                 safe_dataframe(pd.DataFrame(records), use_container_width=True)
@@ -1017,16 +973,7 @@ def render_tool_result(tool_name: str, result: Dict[str, Any]):
         if "error" in result:
             st.error(result["error"])
         else:
-            st.markdown(
-                f"""
-                <div style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:10px 12px;margin:8px 0 10px 0;">
-                    <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#1f2937;">分组统计结果</div>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;margin-right:6px;">{result.get('group_by','-')}</span>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;">{result.get('metric','-')} · {result.get('agg','-')}</span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.markdown(f"**分组统计结果**：{result.get('group_by','-')} / {result.get('metric','-')} / {result.get('agg','-')}")
             table = result.get("table", [])
             if table:
                 safe_dataframe(pd.DataFrame(table), use_container_width=True)
@@ -1035,20 +982,10 @@ def render_tool_result(tool_name: str, result: Dict[str, Any]):
         if "error" in result:
             st.error(result["error"])
         else:
-            st.markdown(
-                f"""
-                <div style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:10px 12px;margin:8px 0 10px 0;">
-                    <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#1f2937;">字段说明</div>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;margin-right:6px;">{result.get('field_name','-')}</span>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;">{result.get('dtype','-')}</span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.markdown(f"**字段说明：{result.get('field_name','-')}**")
             st.write(result.get("explanation", ""))
             aux = {k: v for k, v in result.items() if k not in ["field_name", "explanation"]}
             st.json(aux)
-
 
 # =========================
 # Sidebar：项目区 / 知识库区 / 测试区
@@ -1064,7 +1001,6 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    # 项目区
     st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-title">📁 项目区</div>', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-desc">管理当前项目、加载数据库、查看连接状态。</div>', unsafe_allow_html=True)
@@ -1097,7 +1033,6 @@ with st.sidebar:
         st.warning("大模型连接：未配置")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # 知识库区
     st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-title">📚 知识库区</div>', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-desc">可上传 txt / md 片段，追加到本地知识库。</div>', unsafe_allow_html=True)
@@ -1131,23 +1066,18 @@ with st.sidebar:
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # 测试区
     st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-title">🧪 测试区</div>', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-desc">快速向右侧聊天面板发送测试问题。</div>', unsafe_allow_html=True)
 
     if st.button("测试：沉淀原因", use_container_width=True):
         queue_prompt("为什么超声后出现白色沉淀？")
-
     if st.button("测试：参数预测", use_container_width=True):
         queue_prompt("预测一下：lipid_ratio=4.5, protein_ratio=1.2, temperature=37, time_min=20")
-
     if st.button("测试：高包封率推荐", use_container_width=True):
         queue_prompt("帮我设计几组包封率大于80的参数")
-
     if st.button("测试：字段解释", use_container_width=True):
         queue_prompt("解释一下 EE_Percent 这个字段")
-
     if st.button("清空对话记录", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
@@ -1192,6 +1122,7 @@ try:
         local_path = find_local_db_path()
         if local_path:
             current_db_name = os.path.basename(local_path)
+
             if local_path.lower().endswith(".xlsx"):
                 sheet_names = get_excel_sheet_names_from_path(local_path)
                 if not st.session_state.db_sheet_name or st.session_state.db_sheet_name not in sheet_names:
@@ -1220,9 +1151,7 @@ st.session_state.active_db_name = current_db_name
 # =========================
 left_col, right_col = st.columns([4.6, 1.7], gap="large")
 
-# -------------------------
 # 左侧主工作区
-# -------------------------
 with left_col:
     st.markdown(
         f"""
@@ -1269,7 +1198,6 @@ with left_col:
 
     tabs = st.tabs(["📌 总览看板", "🗃️ 数据工作台", "🧪 实验设计器", "📚 知识工作台"])
 
-    # 1) 总览看板
     with tabs[0]:
         if df_main is None or df_main.empty:
             st.info("请先加载数据库。")
@@ -1278,23 +1206,25 @@ with left_col:
             if "phos_1_type" in df_main.columns:
                 top_phos = df_main["phos_1_type"].dropna().astype(str).value_counts().head(10).reset_index()
                 top_phos.columns = ["phos_1_type", "count"]
-                fig = px.bar(top_phos, x="phos_1_type", y="count", title="Top 10 磷脂类型分布")
-                r1.plotly_chart(fig, use_container_width=True)
+                r1.plotly_chart(px.bar(top_phos, x="phos_1_type", y="count", title="Top 10 磷脂类型分布"), use_container_width=True)
 
             if "apo_type" in df_main.columns:
                 top_apo = df_main["apo_type"].dropna().astype(str).value_counts().head(10).reset_index()
                 top_apo.columns = ["apo_type", "count"]
-                fig = px.bar(top_apo, x="apo_type", y="count", title="Top 10 Apo 类型分布")
-                r2.plotly_chart(fig, use_container_width=True)
+                r2.plotly_chart(px.bar(top_apo, x="apo_type", y="count", title="Top 10 Apo 类型分布"), use_container_width=True)
 
             r3, r4 = st.columns(2)
             if "Size_Mean_nm" in df_main.columns and df_main["Size_Mean_nm"].notna().sum() > 0:
-                fig = px.histogram(df_main.dropna(subset=["Size_Mean_nm"]), x="Size_Mean_nm", nbins=30, title="粒径分布")
-                r3.plotly_chart(fig, use_container_width=True)
+                r3.plotly_chart(
+                    px.histogram(df_main.dropna(subset=["Size_Mean_nm"]), x="Size_Mean_nm", nbins=30, title="粒径分布"),
+                    use_container_width=True,
+                )
 
             if "EE_Percent" in df_main.columns and df_main["EE_Percent"].notna().sum() > 0:
-                fig = px.histogram(df_main.dropna(subset=["EE_Percent"]), x="EE_Percent", nbins=30, title="包封率分布")
-                r4.plotly_chart(fig, use_container_width=True)
+                r4.plotly_chart(
+                    px.histogram(df_main.dropna(subset=["EE_Percent"]), x="EE_Percent", nbins=30, title="包封率分布"),
+                    use_container_width=True,
+                )
 
             if all(col in df_main.columns for col in ["Size_Mean_nm", "PDI"]):
                 plot_df = df_main.dropna(subset=["Size_Mean_nm", "PDI"]).copy()
@@ -1310,7 +1240,6 @@ with left_col:
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
-    # 2) 数据工作台
     with tabs[1]:
         if df_main is None or df_main.empty:
             st.info("请先加载数据库。")
@@ -1347,7 +1276,6 @@ with left_col:
             )
 
             st.success(f"筛选后共有 {len(filtered_df)} 条记录。")
-
             preferred_cols = [
                 "ref_id",
                 "formulation_name",
@@ -1401,10 +1329,8 @@ with left_col:
                     safe_dataframe(agg_df, use_container_width=True)
                     value_col = f"{metric}_{agg}"
                     if value_col in agg_df.columns:
-                        fig = px.bar(agg_df, x=group_by, y=value_col, title=f"{group_by} - {metric} ({agg})")
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(px.bar(agg_df, x=group_by, y=value_col, title=f"{group_by} - {metric} ({agg})"), use_container_width=True)
 
-    # 3) 实验设计器
     with tabs[2]:
         st.markdown("#### 参数实验设计器")
         st.markdown('<div class="small-note">这部分目前接的是 demo 预测公式。等你后续接入真实模型后，这里就能直接变成真正的实验推荐器。</div>', unsafe_allow_html=True)
@@ -1450,7 +1376,6 @@ with left_col:
                 result = reverse_design_impl(target_ee_min=target_ee, top_k=top_k)
                 render_tool_result("reverse_design", result)
 
-    # 4) 知识工作台
     with tabs[3]:
         c1, c2 = st.columns([1.1, 1.0])
 
@@ -1479,9 +1404,7 @@ with left_col:
                 if st.button("让 SMU-Agent 解释这个字段", use_container_width=True):
                     queue_prompt(f"请解释一下字段 {field_name} 的含义，并说明它在当前数据库里有什么作用")
 
-# -------------------------
 # 右侧：完整聊天面板
-# -------------------------
 with right_col:
     st.markdown('<div class="agent-panel">', unsafe_allow_html=True)
 
@@ -1499,7 +1422,6 @@ with right_col:
         unsafe_allow_html=True,
     )
 
-    # 建议问题区
     st.markdown('<div class="agent-box">', unsafe_allow_html=True)
     s1, s2 = st.columns(2)
     if s1.button("创建此页摘要", use_container_width=True):
@@ -1516,7 +1438,6 @@ with right_col:
 
     st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
-    # 聊天记录区
     chat_history = st.container(border=True)
     with chat_history:
         if not st.session_state.messages:
@@ -1543,7 +1464,6 @@ with right_col:
 
     st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
-    # 输入区
     st.markdown('<div class="agent-input-box">', unsafe_allow_html=True)
     with st.form("smu_agent_chat_form", clear_on_submit=True):
         user_text = st.text_area(
