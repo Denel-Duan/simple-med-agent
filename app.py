@@ -14,6 +14,7 @@ from openai import OpenAI
 
 load_dotenv()
 
+
 def get_secret(name: str, default: str = "") -> str:
     try:
         if name in st.secrets:
@@ -21,6 +22,7 @@ def get_secret(name: str, default: str = "") -> str:
     except Exception:
         pass
     return os.getenv(name, default)
+
 
 API_KEY = get_secret("API_KEY", "")
 API_BASE = get_secret("API_BASE", "")
@@ -128,6 +130,7 @@ if "active_df" not in st.session_state:
 if "active_db_name" not in st.session_state:
     st.session_state.active_db_name = "未加载"
 
+
 def unique_keep_order(seq):
     seen = set()
     out = []
@@ -137,21 +140,20 @@ def unique_keep_order(seq):
             seen.add(item)
     return out
 
+
 def make_arrow_safe(df: pd.DataFrame) -> pd.DataFrame:
     safe_df = df.copy()
-
-    # 1. 列名转字符串
     safe_df.columns = [str(c) for c in safe_df.columns]
-
-    # 2. 去掉重复列名
     safe_df = safe_df.loc[:, ~pd.Index(safe_df.columns).duplicated()]
 
-    # 3. 处理 object 列，避免 pyarrow 转换失败
     for col in safe_df.columns:
         if safe_df[col].dtype == "object":
             def _convert(v):
-                if pd.isna(v):
-                    return None
+                try:
+                    if pd.isna(v):
+                        return None
+                except Exception:
+                    pass
                 if isinstance(v, (dict, list, tuple, set)):
                     try:
                         return json.dumps(v, ensure_ascii=False)
@@ -162,9 +164,11 @@ def make_arrow_safe(df: pd.DataFrame) -> pd.DataFrame:
 
     return safe_df
 
+
 def safe_dataframe(df: pd.DataFrame, **kwargs):
     safe_df = make_arrow_safe(df)
     st.dataframe(safe_df, **kwargs)
+
 
 def find_local_db_path() -> Optional[str]:
     for p in DEFAULT_DB_PATHS:
@@ -172,13 +176,16 @@ def find_local_db_path() -> Optional[str]:
             return p
     return None
 
+
 @st.cache_data(show_spinner=False)
 def get_excel_sheet_names_from_path(path: str) -> List[str]:
     return pd.ExcelFile(path).sheet_names
 
+
 @st.cache_data(show_spinner=False)
 def get_excel_sheet_names_from_bytes(file_bytes: bytes) -> List[str]:
     return pd.ExcelFile(io.BytesIO(file_bytes)).sheet_names
+
 
 def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -201,6 +208,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
+
 @st.cache_data(show_spinner=False)
 def load_dataframe_from_path(path: str, sheet_name: Optional[str] = None) -> pd.DataFrame:
     if path.lower().endswith(".csv"):
@@ -208,6 +216,7 @@ def load_dataframe_from_path(path: str, sheet_name: Optional[str] = None) -> pd.
     else:
         df = pd.read_excel(path, sheet_name=sheet_name)
     return clean_dataframe(df)
+
 
 @st.cache_data(show_spinner=False)
 def load_dataframe_from_bytes(file_bytes: bytes, file_name: str, sheet_name: Optional[str] = None) -> pd.DataFrame:
@@ -217,12 +226,23 @@ def load_dataframe_from_bytes(file_bytes: bytes, file_name: str, sheet_name: Opt
         df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=sheet_name)
     return clean_dataframe(df)
 
+
 def get_active_df() -> Optional[pd.DataFrame]:
     df = st.session_state.get("active_df", None)
     return df if isinstance(df, pd.DataFrame) else None
 
-def apply_dashboard_filters(df: pd.DataFrame, phos_1_type=None, apo_type=None, indication=None, method_assembly=None,
-                            shape_observed=None, max_size_nm=None, max_pdi=None, min_ee_percent=None) -> pd.DataFrame:
+
+def apply_dashboard_filters(
+    df: pd.DataFrame,
+    phos_1_type: Optional[str] = None,
+    apo_type: Optional[str] = None,
+    indication: Optional[str] = None,
+    method_assembly: Optional[str] = None,
+    shape_observed: Optional[str] = None,
+    max_size_nm: Optional[float] = None,
+    max_pdi: Optional[float] = None,
+    min_ee_percent: Optional[float] = None,
+) -> pd.DataFrame:
     out = df.copy()
     if phos_1_type and "phos_1_type" in out.columns:
         out = out[out["phos_1_type"] == phos_1_type]
@@ -242,6 +262,7 @@ def apply_dashboard_filters(df: pd.DataFrame, phos_1_type=None, apo_type=None, i
         out = out[out["EE_Percent"].fillna(-1e9) >= min_ee_percent]
     return out
 
+
 def attach_record_labels(df: pd.DataFrame) -> pd.DataFrame:
     out = df.reset_index().rename(columns={"index": "_row_id"}).copy()
     labels = []
@@ -258,6 +279,7 @@ def attach_record_labels(df: pd.DataFrame) -> pd.DataFrame:
     out["_record_label"] = labels
     return out
 
+
 def extract_terms(text: str) -> List[str]:
     text = text.lower().strip()
     zh_terms = re.findall(r'[\u4e00-\u9fff]{2,}', text)
@@ -269,6 +291,7 @@ def extract_terms(text: str) -> List[str]:
             uniq.append(t)
             seen.add(t)
     return uniq
+
 
 def normalize_uploaded_text(text: str) -> str:
     text = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -282,6 +305,7 @@ def normalize_uploaded_text(text: str) -> str:
             cleaned_lines.append(line)
     return "\n".join(cleaned_lines)
 
+
 def decode_uploaded_file(file) -> str:
     raw = file.read()
     for enc in ("utf-8", "utf-8-sig", "gbk", "gb2312"):
@@ -290,6 +314,7 @@ def decode_uploaded_file(file) -> str:
         except Exception:
             continue
     return raw.decode("utf-8", errors="ignore")
+
 
 def search_knowledge_impl(question: str, top_k: int = 4) -> Dict[str, Any]:
     kb = st.session_state.knowledge_text.strip()
@@ -311,6 +336,7 @@ def search_knowledge_impl(question: str, top_k: int = 4) -> Dict[str, Any]:
     scored.sort(key=lambda x: x["score"], reverse=True)
     return {"hits": scored[:top_k]}
 
+
 def _toy_formula(lipid_ratio: float, protein_ratio: float, temperature: float, time_min: float) -> Dict[str, float]:
     ee = 55 + 5.0 * lipid_ratio + 6.0 * protein_ratio + 0.18 * temperature + 0.25 * time_min - 0.45 * (lipid_ratio - 5.0) ** 2 - 0.90 * (protein_ratio - 1.5) ** 2
     size = 160 - 7.0 * lipid_ratio + 6.5 * protein_ratio - 0.7 * temperature - 0.4 * time_min + 0.30 * (lipid_ratio - 4.0) ** 2
@@ -319,6 +345,7 @@ def _toy_formula(lipid_ratio: float, protein_ratio: float, temperature: float, t
     size = max(45.0, min(300.0, size))
     pdi = max(0.05, min(0.60, pdi))
     return {"predicted_ee": round(ee, 2), "predicted_size_nm": round(size, 2), "predicted_pdi": round(pdi, 3)}
+
 
 def predict_formulation_impl(lipid_ratio: float, protein_ratio: float, temperature: float, time_min: float) -> Dict[str, Any]:
     pred = _toy_formula(lipid_ratio, protein_ratio, temperature, time_min)
@@ -329,6 +356,7 @@ def predict_formulation_impl(lipid_ratio: float, protein_ratio: float, temperatu
         "预测PDI": pred["predicted_pdi"],
         "说明": "当前为演示公式，后续可替换为真实 sklearn/xgboost 模型。"
     }
+
 
 def reverse_design_impl(target_ee_min: float = 80.0, top_k: int = 5) -> Dict[str, Any]:
     candidates = []
@@ -355,9 +383,20 @@ def reverse_design_impl(target_ee_min: float = 80.0, top_k: int = 5) -> Dict[str
     candidates.sort(key=lambda x: x["综合评分"], reverse=True)
     return {"目标最低包封率(%)": target_ee_min, "candidates": candidates[:top_k], "说明": "当前为随机采样 + 演示评分，后续可替换为真实优化算法。"}
 
-def query_formulation_database_impl(phos_1_type=None, apo_type=None, indication=None, method_assembly=None,
-                                    shape_observed=None, max_size_nm=None, max_pdi=None, min_ee_percent=None,
-                                    top_k: int = 10, sort_by: Optional[str] = None, ascending: bool = True) -> Dict[str, Any]:
+
+def query_formulation_database_impl(
+    phos_1_type=None,
+    apo_type=None,
+    indication=None,
+    method_assembly=None,
+    shape_observed=None,
+    max_size_nm=None,
+    max_pdi=None,
+    min_ee_percent=None,
+    top_k: int = 10,
+    sort_by: Optional[str] = None,
+    ascending: bool = True
+) -> Dict[str, Any]:
     df = get_active_df()
     if df is None or df.empty:
         return {"error": "当前没有加载结构化数据库。请先上传或放置 Excel 数据表。"}
@@ -371,8 +410,10 @@ def query_formulation_database_impl(phos_1_type=None, apo_type=None, indication=
             filtered = filtered.sort_values(by="Size_Mean_nm", ascending=True, na_position="last")
     preferred_cols = ["ref_id", "formulation_name", "phos_1_type", "phos_1_ratio", "chol_ratio", "apo_type", "apo_ratio", "method_assembly", "Shape_Observed", "Size_Mean_nm", "PDI", "Zeta_mV", "EE_Percent", "DL_Percent", "Indication"]
     cols = [c for c in preferred_cols if c in filtered.columns] or list(filtered.columns[:12])
-    preview_df = filtered[cols].head(top_k).copy().where(pd.notnull(filtered[cols].head(top_k)), None)
+    preview_df = filtered[cols].head(top_k).copy()
+    preview_df = preview_df.where(pd.notnull(preview_df), None)
     return {"matched_count": int(len(filtered)), "preview_count": int(len(preview_df)), "records": preview_df.to_dict(orient="records"), "used_columns": cols}
+
 
 def aggregate_formulation_database_impl(group_by: str, metric: str, agg: str = "mean", top_k: int = 10, ascending: bool = False) -> Dict[str, Any]:
     df = get_active_df()
@@ -391,8 +432,10 @@ def aggregate_formulation_database_impl(group_by: str, metric: str, agg: str = "
         result = work.groupby(group_by)[metric].count().reset_index(name=f"{metric}_{agg}")
     else:
         result = work.groupby(group_by)[metric].agg(agg).reset_index(name=f"{metric}_{agg}")
-    result = result.sort_values(by=f"{metric}_{agg}", ascending=ascending).head(top_k).where(pd.notnull(result), None)
+    result = result.sort_values(by=f"{metric}_{agg}", ascending=ascending).head(top_k)
+    result = result.where(pd.notnull(result), None)
     return {"group_by": group_by, "metric": metric, "agg": agg, "table": result.to_dict(orient="records")}
+
 
 def recommend_similar_formulations_impl(anchor_label: str, top_k: int = 5) -> Dict[str, Any]:
     df = get_active_df()
@@ -419,7 +462,10 @@ def recommend_similar_formulations_impl(anchor_label: str, top_k: int = 5) -> Di
     calc = calc[calc["_record_label"] != anchor_label].sort_values(by="distance").head(top_k)
     merged = calc.merge(labeled_df, on="_record_label", how="left", suffixes=("", "_orig"))
     keep_cols = [c for c in ["_record_label", "distance", "phos_1_type", "apo_type", "Size_Mean_nm", "PDI", "EE_Percent"] if c in merged.columns]
-    return {"anchor": anchor_label, "records": merged[keep_cols].where(pd.notnull(merged[keep_cols]), None).to_dict(orient="records")}
+    out = merged[keep_cols].copy()
+    out = out.where(pd.notnull(out), None)
+    return {"anchor": anchor_label, "records": out.to_dict(orient="records")}
+
 
 def explain_database_field_impl(field_name: str) -> Dict[str, Any]:
     df = get_active_df()
@@ -440,6 +486,7 @@ def explain_database_field_impl(field_name: str) -> Dict[str, Any]:
         uniq = series.dropna().astype(str).value_counts().head(10)
         result["top_values"] = uniq.to_dict()
     return result
+
 
 TOOL_IMPL = {
     "search_knowledge": search_knowledge_impl,
@@ -476,12 +523,14 @@ BASE_SYSTEM_PROMPT = """
 9. 输出风格尽量清晰、结构化、简洁。
 """
 
+
 def build_system_prompt() -> str:
     prompt = BASE_SYSTEM_PROMPT
     df = get_active_df()
     if df is not None and not df.empty:
         prompt += f"\n当前已加载结构化数据库，共 {len(df)} 条记录。可用字段包括：{', '.join(list(df.columns)[:45])}。"
     return prompt
+
 
 def run_agent(user_text: str) -> Dict[str, Any]:
     tool_logs: List[Dict[str, Any]] = []
@@ -531,6 +580,7 @@ def run_agent(user_text: str) -> Dict[str, Any]:
 
     return {"answer": "工具调用次数超过上限，本轮已停止。", "tool_logs": tool_logs}
 
+
 def render_knowledge_hits(hits: List[Dict[str, Any]]):
     if not hits:
         return
@@ -542,14 +592,17 @@ def render_knowledge_hits(hits: List[Dict[str, Any]]):
         )
     st.markdown("</div>", unsafe_allow_html=True)
 
+
 def render_prediction_card(result: Dict[str, Any]):
     st.markdown('<div class="result-card"><div class="result-card-title">预测结果卡片</div><span class="result-tag">演示模型</span><span class="result-tag">数值预测</span></div>', unsafe_allow_html=True)
     safe_dataframe(pd.DataFrame([result]), use_container_width=True)
+
 
 def render_reverse_card(result: Dict[str, Any]):
     st.markdown(f'<div class="result-card"><div class="result-card-title">逆向推荐结果</div><span class="result-tag">目标包封率 ≥ {result.get("目标最低包封率(%)", "-")}</span><span class="result-tag">候选参数</span></div>', unsafe_allow_html=True)
     if result.get("candidates"):
         safe_dataframe(pd.DataFrame(result["candidates"]), use_container_width=True)
+
 
 def render_query_card(result: Dict[str, Any]):
     if "error" in result:
@@ -560,6 +613,7 @@ def render_query_card(result: Dict[str, Any]):
     if records:
         safe_dataframe(pd.DataFrame(records), use_container_width=True)
 
+
 def render_aggregate_card(result: Dict[str, Any]):
     if "error" in result:
         st.error(result["error"])
@@ -568,6 +622,7 @@ def render_aggregate_card(result: Dict[str, Any]):
     if result.get("table"):
         safe_dataframe(pd.DataFrame(result["table"]), use_container_width=True)
 
+
 def render_similar_card(result: Dict[str, Any]):
     if "error" in result:
         st.error(result["error"])
@@ -575,6 +630,7 @@ def render_similar_card(result: Dict[str, Any]):
     st.markdown(f'<div class="result-card"><div class="result-card-title">相似处方推荐</div><span class="result-tag">锚点样本</span><span class="result-tag">{html.escape(str(result.get("anchor", "-")))}</span></div>', unsafe_allow_html=True)
     if result.get("records"):
         safe_dataframe(pd.DataFrame(result["records"]), use_container_width=True)
+
 
 def render_field_explain_card(result: Dict[str, Any]):
     if "error" in result:
@@ -585,6 +641,7 @@ def render_field_explain_card(result: Dict[str, Any]):
     aux = {k: v for k, v in result.items() if k not in ["field_name", "explanation"]}
     st.json(aux)
 
+
 def render_message_card(role: str, content: str):
     role_label = "你" if role == "user" else "SMU-Agent"
     css_class = "user" if role == "user" else "agent"
@@ -594,9 +651,11 @@ def render_message_card(role: str, content: str):
         unsafe_allow_html=True
     )
 
+
 def trigger_prompt(prompt_text: str):
     st.session_state.pending_prompt = prompt_text
     st.rerun()
+
 
 with st.sidebar:
     st.markdown('<div class="panel-card"><div class="panel-title">🗂️ 项目区</div><div class="panel-desc">左侧只保留配置和导入功能，主要交互工作台放到中间。</div>', unsafe_allow_html=True)
@@ -984,4 +1043,76 @@ with main_right:
         if msg.get("tool_logs"):
             for log in msg["tool_logs"]:
                 if log["tool"] == "search_knowledge" and "hits" in log["result"]:
-                   
+                    render_knowledge_hits(log["result"]["hits"])
+                elif log["tool"] == "predict_formulation" and "预测包封率(%)" in log["result"]:
+                    render_prediction_card(log["result"])
+                elif log["tool"] == "reverse_design" and "candidates" in log["result"]:
+                    render_reverse_card(log["result"])
+                elif log["tool"] == "query_formulation_database":
+                    render_query_card(log["result"])
+                elif log["tool"] == "aggregate_formulation_database":
+                    render_aggregate_card(log["result"])
+                elif log["tool"] == "recommend_similar_formulations":
+                    render_similar_card(log["result"])
+                elif log["tool"] == "explain_database_field":
+                    render_field_explain_card(log["result"])
+            with st.expander("查看工具调用详情"):
+                st.json(msg["tool_logs"])
+
+    st.markdown('<div class="smu-prompt-box">', unsafe_allow_html=True)
+    with st.form("smu_agent_form", clear_on_submit=True):
+        user_text = st.text_area(
+            "输入问题",
+            placeholder="例如：按 phos_1_type 统计平均包封率；或者帮我找 PDI<0.2 且粒径较小的样本",
+            height=100,
+            label_visibility="collapsed"
+        )
+        sf1, sf2 = st.columns(2)
+        submitted = sf1.form_submit_button("发送给 SMU-Agent", use_container_width=True)
+        clear_chat = sf2.form_submit_button("清空对话", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if clear_chat:
+        st.session_state.messages = []
+        st.rerun()
+
+    prompt = user_text.strip() if submitted and user_text.strip() else st.session_state.pending_prompt
+    if prompt:
+        st.session_state.pending_prompt = None
+        st.session_state.messages.append({"role": "user", "content": prompt})
+
+        render_message_card("user", prompt)
+
+        with st.status("SMU-Agent 正在分析并决定调用哪些工具……", expanded=True) as status:
+            result = run_agent(prompt)
+            answer, tool_logs = result["answer"], result["tool_logs"]
+            status.update(label="处理完成", state="complete", expanded=False)
+
+        render_message_card("assistant", answer)
+
+        for log in tool_logs:
+            if log["tool"] == "search_knowledge" and "hits" in log["result"]:
+                render_knowledge_hits(log["result"]["hits"])
+            elif log["tool"] == "predict_formulation" and "预测包封率(%)" in log["result"]:
+                render_prediction_card(log["result"])
+            elif log["tool"] == "reverse_design" and "candidates" in log["result"]:
+                render_reverse_card(log["result"])
+            elif log["tool"] == "query_formulation_database":
+                render_query_card(log["result"])
+            elif log["tool"] == "aggregate_formulation_database":
+                render_aggregate_card(log["result"])
+            elif log["tool"] == "recommend_similar_formulations":
+                render_similar_card(log["result"])
+            elif log["tool"] == "explain_database_field":
+                render_field_explain_card(log["result"])
+
+        with st.expander("查看工具调用详情"):
+            st.json(tool_logs)
+
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer,
+            "tool_logs": tool_logs
+        })
+
+    st.markdown('</div>', unsafe_allow_html=True)
