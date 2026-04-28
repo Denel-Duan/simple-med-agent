@@ -2,3 +2,5 @@ streamlit
 openai>=1.0
 python-dotenv
 pandas
+plotly
+openpyxl
