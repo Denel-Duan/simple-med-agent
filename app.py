@@ -272,7 +272,7 @@ div[data-testid="stChatMessageContent"]{
 STATE_DEFAULTS = {
     "messages": [],
     "knowledge_text": DEFAULT_KNOWLEDGE,
-    "project_name": "脑靶向 rHDL 项目",
+    "project_name": "靶向 rHDL 项目",
     "project_type": "处方开发",
     "project_desc": "围绕 rHDL / 纳米制剂体系，进行文献知识检索、数据库筛选、参数预测和逆向推荐。",
     "pending_prompt": None,
