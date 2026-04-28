@@ -128,6 +128,44 @@ if "active_df" not in st.session_state:
 if "active_db_name" not in st.session_state:
     st.session_state.active_db_name = "未加载"
 
+def unique_keep_order(seq):
+    seen = set()
+    out = []
+    for item in seq:
+        if item not in seen:
+            out.append(item)
+            seen.add(item)
+    return out
+
+def make_arrow_safe(df: pd.DataFrame) -> pd.DataFrame:
+    safe_df = df.copy()
+
+    # 1. 列名转字符串
+    safe_df.columns = [str(c) for c in safe_df.columns]
+
+    # 2. 去掉重复列名
+    safe_df = safe_df.loc[:, ~pd.Index(safe_df.columns).duplicated()]
+
+    # 3. 处理 object 列，避免 pyarrow 转换失败
+    for col in safe_df.columns:
+        if safe_df[col].dtype == "object":
+            def _convert(v):
+                if pd.isna(v):
+                    return None
+                if isinstance(v, (dict, list, tuple, set)):
+                    try:
+                        return json.dumps(v, ensure_ascii=False)
+                    except Exception:
+                        return str(v)
+                return str(v)
+            safe_df[col] = safe_df[col].map(_convert)
+
+    return safe_df
+
+def safe_dataframe(df: pd.DataFrame, **kwargs):
+    safe_df = make_arrow_safe(df)
+    st.dataframe(safe_df, **kwargs)
+
 def find_local_db_path() -> Optional[str]:
     for p in DEFAULT_DB_PATHS:
         if os.path.exists(p):
@@ -452,12 +490,15 @@ def run_agent(user_text: str) -> Dict[str, Any]:
     for msg in st.session_state.messages[-8:]:
         messages.append({"role": msg["role"], "content": msg["content"]})
     messages.append({"role": "user", "content": user_text})
+
     for _ in range(6):
         response = client.chat.completions.create(model=MODEL, messages=messages, tools=TOOLS, tool_choice="auto")
         msg = response.choices[0].message
         if not getattr(msg, "tool_calls", None):
             return {"answer": msg.content or "", "tool_logs": tool_logs}
+
         assistant_message = {"role": "assistant", "content": msg.content or "", "tool_calls": []}
+
         for tool_call in msg.tool_calls:
             tool_name = tool_call.function.name
             arguments = tool_call.function.arguments or "{}"
@@ -465,6 +506,7 @@ def run_agent(user_text: str) -> Dict[str, Any]:
                 args = json.loads(arguments)
             except json.JSONDecodeError:
                 args = {}
+
             if tool_name not in TOOL_IMPL:
                 result = {"error": f"未知工具：{tool_name}"}
             else:
@@ -472,6 +514,7 @@ def run_agent(user_text: str) -> Dict[str, Any]:
                     result = TOOL_IMPL[tool_name](**args)
                 except Exception as e:
                     result = {"error": f"{tool_name} 执行失败：{str(e)}"}
+
             tool_logs.append({"tool": tool_name, "arguments": args, "result": result})
             tool_result_by_call_id[tool_call.id] = result
             assistant_message["tool_calls"].append({
@@ -479,10 +522,13 @@ def run_agent(user_text: str) -> Dict[str, Any]:
                 "type": "function",
                 "function": {"name": tool_name, "arguments": json.dumps(args, ensure_ascii=False)}
             })
+
         messages.append(assistant_message)
+
         for tool_call in msg.tool_calls:
             tool_result = tool_result_by_call_id.get(tool_call.id, {"error": "没有找到工具结果"})
             messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": json.dumps(tool_result, ensure_ascii=False)})
+
     return {"answer": "工具调用次数超过上限，本轮已停止。", "tool_logs": tool_logs}
 
 def render_knowledge_hits(hits: List[Dict[str, Any]]):
@@ -498,12 +544,12 @@ def render_knowledge_hits(hits: List[Dict[str, Any]]):
 
 def render_prediction_card(result: Dict[str, Any]):
     st.markdown('<div class="result-card"><div class="result-card-title">预测结果卡片</div><span class="result-tag">演示模型</span><span class="result-tag">数值预测</span></div>', unsafe_allow_html=True)
-    st.dataframe(pd.DataFrame([result]), use_container_width=True)
+    safe_dataframe(pd.DataFrame([result]), use_container_width=True)
 
 def render_reverse_card(result: Dict[str, Any]):
     st.markdown(f'<div class="result-card"><div class="result-card-title">逆向推荐结果</div><span class="result-tag">目标包封率 ≥ {result.get("目标最低包封率(%)", "-")}</span><span class="result-tag">候选参数</span></div>', unsafe_allow_html=True)
     if result.get("candidates"):
-        st.dataframe(pd.DataFrame(result["candidates"]), use_container_width=True)
+        safe_dataframe(pd.DataFrame(result["candidates"]), use_container_width=True)
 
 def render_query_card(result: Dict[str, Any]):
     if "error" in result:
@@ -512,7 +558,7 @@ def render_query_card(result: Dict[str, Any]):
     st.markdown(f'<div class="result-card"><div class="result-card-title">数据库筛选结果</div><span class="result-tag">匹配记录 {result.get("matched_count", 0)} 条</span><span class="result-tag">展示 {result.get("preview_count", 0)} 条</span></div>', unsafe_allow_html=True)
     records = result.get("records", [])
     if records:
-        st.dataframe(pd.DataFrame(records), use_container_width=True)
+        safe_dataframe(pd.DataFrame(records), use_container_width=True)
 
 def render_aggregate_card(result: Dict[str, Any]):
     if "error" in result:
@@ -520,7 +566,7 @@ def render_aggregate_card(result: Dict[str, Any]):
         return
     st.markdown(f'<div class="result-card"><div class="result-card-title">分组统计结果</div><span class="result-tag">{result.get("group_by", "-")}</span><span class="result-tag">{result.get("metric", "-")} · {result.get("agg", "-")}</span></div>', unsafe_allow_html=True)
     if result.get("table"):
-        st.dataframe(pd.DataFrame(result["table"]), use_container_width=True)
+        safe_dataframe(pd.DataFrame(result["table"]), use_container_width=True)
 
 def render_similar_card(result: Dict[str, Any]):
     if "error" in result:
@@ -528,7 +574,7 @@ def render_similar_card(result: Dict[str, Any]):
         return
     st.markdown(f'<div class="result-card"><div class="result-card-title">相似处方推荐</div><span class="result-tag">锚点样本</span><span class="result-tag">{html.escape(str(result.get("anchor", "-")))}</span></div>', unsafe_allow_html=True)
     if result.get("records"):
-        st.dataframe(pd.DataFrame(result["records"]), use_container_width=True)
+        safe_dataframe(pd.DataFrame(result["records"]), use_container_width=True)
 
 def render_field_explain_card(result: Dict[str, Any]):
     if "error" in result:
@@ -645,7 +691,7 @@ with st.sidebar:
 df_main = get_active_df()
 
 st.markdown(
-    f'<div class="hero-wrap"><div class="hero-title">医学智能体平台 · 双升级版</div><div class="hero-subtitle">当前项目：<b>{st.session_state.project_name}</b> ｜ 模型：<b>{MODEL}</b> ｜ 当前数据库：<b>{st.session_state.active_db_name}</b><br>这版同时做了两件事：界面产品化 + 功能深化。右侧助手改名为 <b>SMU-Agent</b>，中间区域升级成真正的交互工作台。</div></div>',
+    f'<div class="hero-wrap"><div class="hero-title">医学智能体平台 · 双升级版（稳定修复）</div><div class="hero-subtitle">当前项目：<b>{st.session_state.project_name}</b> ｜ 模型：<b>{MODEL}</b> ｜ 当前数据库：<b>{st.session_state.active_db_name}</b><br>这版在保留产品化界面与增强功能的同时，额外修复了 Streamlit Cloud 上 dataframe 的 Arrow 转换报错。</div></div>',
     unsafe_allow_html=True
 )
 
@@ -758,7 +804,7 @@ with main_left:
 
             preferred_cols = ["ref_id", "formulation_name", "phos_1_type", "phos_1_ratio", "chol_ratio", "apo_type", "apo_ratio", "method_assembly", "Shape_Observed", "Size_Mean_nm", "PDI", "Zeta_mV", "EE_Percent", "DL_Percent", "Indication"]
             show_cols = [c for c in preferred_cols if c in filtered_df.columns] or list(filtered_df.columns[:15])
-            st.dataframe(filtered_df[show_cols], use_container_width=True, height=320)
+            safe_dataframe(filtered_df[show_cols], use_container_width=True, height=320)
 
             labeled_df = attach_record_labels(filtered_df)
             if not labeled_df.empty:
@@ -792,8 +838,9 @@ with main_left:
 
             if compare_labels and compare_metrics:
                 compare_df = labeled_df[labeled_df["_record_label"].isin(compare_labels)].copy()
-                display_cols = ["_record_label"] + compare_metrics
-                st.dataframe(compare_df[display_cols], use_container_width=True)
+                display_cols = unique_keep_order(["_record_label"] + compare_metrics)
+                safe_dataframe(compare_df[display_cols], use_container_width=True)
+
                 long_df = compare_df[display_cols].melt(id_vars="_record_label", value_vars=compare_metrics, var_name="metric", value_name="value")
                 st.plotly_chart(px.bar(long_df, x="_record_label", y="value", color="metric", barmode="group", title="样本对比图"), use_container_width=True)
 
@@ -820,8 +867,10 @@ with main_left:
             rank_df = attach_record_labels(df_main).dropna(subset=[rank_metric]).copy()
             rank_df = rank_df.sort_values(by=rank_metric, ascending=(rank_order == "升序（越小越靠前）")).head(rank_topn)
 
-            rank_show_cols = [c for c in ["_record_label", "phos_1_type", "apo_type", rank_metric, "PDI", "Size_Mean_nm", "EE_Percent"] if c in rank_df.columns]
-            st.dataframe(rank_df[rank_show_cols], use_container_width=True)
+            rank_show_cols = unique_keep_order([c for c in ["_record_label", "phos_1_type", "apo_type", rank_metric, "PDI", "Size_Mean_nm", "EE_Percent"] if c in rank_df.columns])
+            rank_display_df = rank_df[rank_show_cols].copy()
+            safe_dataframe(rank_display_df, use_container_width=True)
+
             st.plotly_chart(px.bar(rank_df, x="_record_label", y=rank_metric, title=f"{rank_metric} Top {rank_topn}"), use_container_width=True)
 
             st.markdown("#### 分组统计")
@@ -833,7 +882,7 @@ with main_left:
                 agg_result = aggregate_formulation_database_impl(group_col, metric_col, agg_method, top_k=20, ascending=False)
                 if "table" in agg_result:
                     result_df = pd.DataFrame(agg_result["table"])
-                    st.dataframe(result_df, use_container_width=True)
+                    safe_dataframe(result_df, use_container_width=True)
                     value_col = f"{metric_col}_{agg_method}"
                     if not result_df.empty and value_col in result_df.columns:
                         st.plotly_chart(px.bar(result_df, x=group_col, y=value_col, title=f"{group_col} - {metric_col} ({agg_method})"), use_container_width=True)
@@ -869,7 +918,7 @@ with main_left:
                 "预测粒径(nm)": pred["预测粒径(nm)"],
                 "预测PDI": pred["预测PDI"]
             }])
-            st.dataframe(design_df, use_container_width=True)
+            safe_dataframe(design_df, use_container_width=True)
 
             target_ee = st.slider("目标包封率阈值", 60.0, 95.0, 80.0, 1.0)
             top_k = st.slider("推荐候选数", 3, 10, 5, 1)
@@ -935,76 +984,4 @@ with main_right:
         if msg.get("tool_logs"):
             for log in msg["tool_logs"]:
                 if log["tool"] == "search_knowledge" and "hits" in log["result"]:
-                    render_knowledge_hits(log["result"]["hits"])
-                elif log["tool"] == "predict_formulation" and "预测包封率(%)" in log["result"]:
-                    render_prediction_card(log["result"])
-                elif log["tool"] == "reverse_design" and "candidates" in log["result"]:
-                    render_reverse_card(log["result"])
-                elif log["tool"] == "query_formulation_database":
-                    render_query_card(log["result"])
-                elif log["tool"] == "aggregate_formulation_database":
-                    render_aggregate_card(log["result"])
-                elif log["tool"] == "recommend_similar_formulations":
-                    render_similar_card(log["result"])
-                elif log["tool"] == "explain_database_field":
-                    render_field_explain_card(log["result"])
-            with st.expander("查看工具调用详情"):
-                st.json(msg["tool_logs"])
-
-    st.markdown('<div class="smu-prompt-box">', unsafe_allow_html=True)
-    with st.form("smu_agent_form", clear_on_submit=True):
-        user_text = st.text_area(
-            "输入问题",
-            placeholder="例如：按 phos_1_type 统计平均包封率；或者帮我找 PDI<0.2 且粒径较小的样本",
-            height=100,
-            label_visibility="collapsed"
-        )
-        sf1, sf2 = st.columns(2)
-        submitted = sf1.form_submit_button("发送给 SMU-Agent", use_container_width=True)
-        clear_chat = sf2.form_submit_button("清空对话", use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    if clear_chat:
-        st.session_state.messages = []
-        st.rerun()
-
-    prompt = user_text.strip() if submitted and user_text.strip() else st.session_state.pending_prompt
-    if prompt:
-        st.session_state.pending_prompt = None
-        st.session_state.messages.append({"role": "user", "content": prompt})
-
-        render_message_card("user", prompt)
-
-        with st.status("SMU-Agent 正在分析并决定调用哪些工具……", expanded=True) as status:
-            result = run_agent(prompt)
-            answer, tool_logs = result["answer"], result["tool_logs"]
-            status.update(label="处理完成", state="complete", expanded=False)
-
-        render_message_card("assistant", answer)
-
-        for log in tool_logs:
-            if log["tool"] == "search_knowledge" and "hits" in log["result"]:
-                render_knowledge_hits(log["result"]["hits"])
-            elif log["tool"] == "predict_formulation" and "预测包封率(%)" in log["result"]:
-                render_prediction_card(log["result"])
-            elif log["tool"] == "reverse_design" and "candidates" in log["result"]:
-                render_reverse_card(log["result"])
-            elif log["tool"] == "query_formulation_database":
-                render_query_card(log["result"])
-            elif log["tool"] == "aggregate_formulation_database":
-                render_aggregate_card(log["result"])
-            elif log["tool"] == "recommend_similar_formulations":
-                render_similar_card(log["result"])
-            elif log["tool"] == "explain_database_field":
-                render_field_explain_card(log["result"])
-
-        with st.expander("查看工具调用详情"):
-            st.json(tool_logs)
-
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": answer,
-            "tool_logs": tool_logs
-        })
-
-    st.markdown('</div>', unsafe_allow_html=True)
+                   
