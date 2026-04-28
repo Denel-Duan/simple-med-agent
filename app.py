@@ -1586,7 +1586,7 @@ with right_col:
         )
         st.rerun()
 
-    st.markdown("</div>", unsafe_allow_html=True)import os
+    st.markdown("</div>", unsafe_allow_html=True)
 import io
 import json
 import random
