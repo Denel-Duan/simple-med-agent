@@ -83,7 +83,7 @@ FIELD_EXPLANATIONS = {
 }
 
 # =========================
-# 全局样式
+# 样式
 # =========================
 st.markdown(
     """
@@ -96,27 +96,23 @@ st.markdown(
     --muted:#667085;
     --brand:#2563eb;
     --brand-soft:#eef4ff;
+    --accent:#f8fafc;
 }
-
-html, body, [class*="css"] {
+html, body, [class*="css"]  {
     font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
-
 .stApp {
     background: linear-gradient(180deg, #f8f9fc 0%, #f4f6fb 100%);
 }
-
 .main .block-container{
     padding-top: 0.8rem;
     padding-bottom: 1rem;
     max-width: 1650px;
 }
-
 section[data-testid="stSidebar"]{
     background: linear-gradient(180deg, #fbfcff 0%, #f3f6fd 100%);
     border-right: 1px solid var(--line);
 }
-
 .sidebar-card{
     background: #fff;
     border: 1px solid var(--line);
@@ -125,21 +121,18 @@ section[data-testid="stSidebar"]{
     margin-bottom: 12px;
     box-shadow: 0 3px 12px rgba(15,23,42,0.04);
 }
-
 .sidebar-title{
     font-size: 15px;
     font-weight: 800;
     color: var(--text);
     margin-bottom: 8px;
 }
-
 .sidebar-desc{
     font-size: 12px;
     color: var(--muted);
     line-height: 1.7;
     margin-bottom: 8px;
 }
-
 .hero{
     background: linear-gradient(135deg,#ffffff 0%,#f3f7ff 100%);
     border: 1px solid var(--line);
@@ -148,20 +141,17 @@ section[data-testid="stSidebar"]{
     box-shadow: 0 6px 20px rgba(15,23,42,0.04);
     margin-bottom: 14px;
 }
-
 .hero-title{
     font-size: 30px;
     font-weight: 900;
     color: #111827;
     margin-bottom: 6px;
 }
-
 .hero-sub{
     font-size: 14px;
     color: var(--muted);
     line-height: 1.8;
 }
-
 .soft-card{
     background: #fff;
     border: 1px solid var(--line);
@@ -170,14 +160,17 @@ section[data-testid="stSidebar"]{
     box-shadow: 0 4px 16px rgba(15,23,42,0.04);
     margin-bottom: 12px;
 }
-
 .soft-title{
     font-size: 16px;
     font-weight: 800;
     color: var(--text);
     margin-bottom: 8px;
 }
-
+.small-note{
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+}
 .quick-card{
     background: linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);
     border: 1px solid var(--line);
@@ -185,81 +178,123 @@ section[data-testid="stSidebar"]{
     padding: 12px 14px;
     margin-bottom: 12px;
 }
-
-.small-note{
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.7;
+.chat-shell{
+    background: linear-gradient(180deg,#f7f3ef 0%,#f5f1ed 100%);
+    border: 1px solid #ebe5df;
+    border-radius: 26px;
+    padding: 18px 16px 16px 16px;
+    min-height: 82vh;
+    box-shadow: 0 8px 28px rgba(15,23,42,0.05);
 }
-
+.chat-topline{
+    display:flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+.chat-badge{
+    display:inline-block;
+    font-size: 12px;
+    color: #4b5563;
+    background:#ece7e2;
+    border:1px solid #ddd4cd;
+    padding:4px 10px;
+    border-radius:999px;
+}
+.chat-greeting{
+    font-size: 28px;
+    font-weight: 900;
+    color: #1f1f1f;
+    line-height: 1.35;
+    margin: 12px 0 18px 0;
+}
+.chat-hint{
+    color:#6b7280;
+    font-size:13px;
+    line-height:1.7;
+    margin-bottom:10px;
+}
+.suggest-wrap{
+    background: rgba(255,255,255,0.55);
+    border:1px solid #e6ddd5;
+    border-radius: 18px;
+    padding: 10px;
+    margin-bottom: 14px;
+}
+.chat-history{
+    background: rgba(255,255,255,0.38);
+    border:1px solid #e7ded6;
+    border-radius: 20px;
+    padding: 12px;
+    min-height: 280px;
+    max-height: 52vh;
+    overflow-y: auto;
+    margin-bottom: 14px;
+}
+.msg{
+    border-radius: 18px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+}
+.msg-user{
+    background: linear-gradient(180deg,#edf4ff 0%,#e8f0ff 100%);
+    border:1px solid #d8e6ff;
+}
+.msg-assistant{
+    background: #ffffff;
+    border:1px solid #e8e0d7;
+}
+.msg-role{
+    font-size: 11px;
+    font-weight: 800;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    margin-bottom: 5px;
+}
+.msg-content{
+    font-size: 14px;
+    color:#1f2937;
+    line-height:1.85;
+}
+.tool-card{
+    background: #fff;
+    border:1px solid #e6eaf2;
+    border-radius: 16px;
+    padding: 10px 12px;
+    margin: 8px 0 10px 0;
+}
+.tool-title{
+    font-size: 13px;
+    font-weight: 800;
+    margin-bottom: 6px;
+    color:#1f2937;
+}
+.tool-tag{
+    display:inline-block;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background:#eef4ff;
+    color:#3156a6;
+    border:1px solid #dbe6ff;
+    margin-right: 6px;
+    margin-bottom: 6px;
+}
+.input-shell{
+    background:#fff;
+    border:1px solid #e8dfd7;
+    border-radius: 22px;
+    padding: 10px 10px 6px 10px;
+}
+.stTextArea textarea{
+    border-radius: 16px !important;
+}
 div[data-testid="stMetric"]{
     background:#fff;
     border:1px solid var(--line);
     border-radius:16px;
     padding:8px 10px;
-}
-
-/* ===== 右侧聊天面板 ===== */
-.agent-panel{
-    background: linear-gradient(180deg, #f8f5f1 0%, #f5f1ec 100%);
-    border: 1px solid #e8dfd7;
-    border-radius: 24px;
-    padding: 16px 16px 14px 16px;
-    box-shadow: 0 8px 28px rgba(15,23,42,0.05);
-}
-
-.agent-title{
-    font-size: 28px;
-    font-weight: 900;
-    color: #1f1f1f;
-    line-height: 1.35;
-    margin-bottom: 6px;
-}
-
-.agent-sub{
-    color:#6b7280;
-    font-size:13px;
-    line-height:1.8;
-    margin-bottom: 12px;
-}
-
-.agent-chip{
-    display:inline-block;
-    font-size: 11px;
-    color: #4b5563;
-    background:#eee7df;
-    border:1px solid #ddd3ca;
-    padding:4px 10px;
-    border-radius:999px;
-    margin-right: 6px;
-    margin-bottom: 6px;
-}
-
-.agent-box{
-    background:#ffffffcc;
-    border:1px solid #e8dfd7;
-    border-radius: 18px;
-    padding: 12px;
-}
-
-.agent-input-box{
-    background:#fff;
-    border:1px solid #e8dfd7;
-    border-radius: 18px;
-    padding: 10px;
-}
-
-div[data-testid="stChatMessage"]{
-    border-radius: 16px;
-    padding: 2px 2px;
-}
-
-div[data-testid="stChatMessageContent"]{
-    border-radius: 16px;
-}
-
-.stTextArea textarea{
-    border-radius: 14px !important;
 }
 </style>
 """,
@@ -269,7 +304,7 @@ div[data-testid="stChatMessageContent"]{
 # =========================
 # Session State
 # =========================
-STATE_DEFAULTS = {
+state_defaults = {
     "messages": [],
     "knowledge_text": DEFAULT_KNOWLEDGE,
     "project_name": "脑靶向 rHDL 项目",
@@ -282,18 +317,13 @@ STATE_DEFAULTS = {
     "active_df": None,
     "active_db_name": "未加载",
 }
-for k, v in STATE_DEFAULTS.items():
+for k, v in state_defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
 # =========================
-# 通用工具函数
+# 工具函数
 # =========================
-def queue_prompt(text: str):
-    st.session_state.pending_prompt = text
-    st.rerun()
-
-
 def unique_keep_order(seq):
     seen = set()
     out = []
@@ -304,29 +334,20 @@ def unique_keep_order(seq):
     return out
 
 
+def queue_prompt(text: str):
+    st.session_state.pending_prompt = text
+    st.rerun()
+
+
 def make_arrow_safe(df: pd.DataFrame) -> pd.DataFrame:
     safe_df = df.copy()
     safe_df.columns = [str(c) for c in safe_df.columns]
     safe_df = safe_df.loc[:, ~pd.Index(safe_df.columns).duplicated()]
-
     for col in safe_df.columns:
         if safe_df[col].dtype == "object":
-            def _convert(v):
-                try:
-                    if pd.isna(v):
-                        return None
-                except Exception:
-                    pass
-
-                if isinstance(v, (dict, list, tuple, set)):
-                    try:
-                        return json.dumps(v, ensure_ascii=False)
-                    except Exception:
-                        return str(v)
-                return str(v)
-
-            safe_df[col] = safe_df[col].map(_convert)
-
+            safe_df[col] = safe_df[col].map(
+                lambda v: None if pd.isna(v) else json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list, tuple, set)) else str(v)
+            )
     return safe_df
 
 
@@ -463,24 +484,22 @@ def apply_dashboard_filters(
     min_ee_percent: Optional[float] = None,
 ) -> pd.DataFrame:
     out = df.copy()
-
     if phos_1_type and "phos_1_type" in out.columns:
-        out = out[out["phos_1_type"].astype(str) == str(phos_1_type)]
+        out = out[out["phos_1_type"] == phos_1_type]
     if apo_type and "apo_type" in out.columns:
-        out = out[out["apo_type"].astype(str) == str(apo_type)]
+        out = out[out["apo_type"] == apo_type]
     if indication and "Indication" in out.columns:
-        out = out[out["Indication"].astype(str) == str(indication)]
+        out = out[out["Indication"] == indication]
     if method_assembly and "method_assembly" in out.columns:
-        out = out[out["method_assembly"].astype(str) == str(method_assembly)]
+        out = out[out["method_assembly"] == method_assembly]
     if shape_observed and "Shape_Observed" in out.columns:
-        out = out[out["Shape_Observed"].astype(str) == str(shape_observed)]
+        out = out[out["Shape_Observed"] == shape_observed]
     if max_size_nm is not None and "Size_Mean_nm" in out.columns:
         out = out[out["Size_Mean_nm"].fillna(1e9) <= max_size_nm]
     if max_pdi is not None and "PDI" in out.columns:
         out = out[out["PDI"].fillna(1e9) <= max_pdi]
     if min_ee_percent is not None and "EE_Percent" in out.columns:
         out = out[out["EE_Percent"].fillna(-1e9) >= min_ee_percent]
-
     return out
 
 
@@ -933,12 +952,21 @@ def run_agent(user_text: str) -> Dict[str, Any]:
 
 
 # =========================
-# 聊天与工具结果渲染
+# 渲染函数
 # =========================
-def render_chat_message(role: str, content: str):
-    avatar = "🧑‍🔬" if role == "user" else "🤖"
-    with st.chat_message(role, avatar=avatar):
-        st.markdown(content)
+def render_message(role: str, content: str):
+    role_label = "你" if role == "user" else "SMU-Agent"
+    css_class = "msg-user" if role == "user" else "msg-assistant"
+    safe_content = html.escape(content).replace("\n", "<br>")
+    st.markdown(
+        f"""
+        <div class="msg {css_class}">
+            <div class="msg-role">{role_label}</div>
+            <div class="msg-content">{safe_content}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_tool_result(tool_name: str, result: Dict[str, Any]):
@@ -961,10 +989,10 @@ def render_tool_result(tool_name: str, result: Dict[str, Any]):
     elif tool_name == "predict_formulation":
         st.markdown(
             """
-            <div style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:10px 12px;margin:8px 0 10px 0;">
-                <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#1f2937;">参数预测结果</div>
-                <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;margin-right:6px;">演示模型</span>
-                <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;">数值预测</span>
+            <div class="tool-card">
+                <div class="tool-title">参数预测结果</div>
+                <span class="tool-tag">演示模型</span>
+                <span class="tool-tag">数值预测</span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -984,9 +1012,9 @@ def render_tool_result(tool_name: str, result: Dict[str, Any]):
     elif tool_name == "reverse_design":
         st.markdown(
             f"""
-            <div style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:10px 12px;margin:8px 0 10px 0;">
-                <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#1f2937;">逆向推荐结果</div>
-                <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;">目标 EE ≥ {result.get('目标最低包封率(%)','-')}</span>
+            <div class="tool-card">
+                <div class="tool-title">逆向推荐结果</div>
+                <span class="tool-tag">目标 EE ≥ {result.get('目标最低包封率(%)','-')}</span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1001,10 +1029,10 @@ def render_tool_result(tool_name: str, result: Dict[str, Any]):
         else:
             st.markdown(
                 f"""
-                <div style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:10px 12px;margin:8px 0 10px 0;">
-                    <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#1f2937;">数据库筛选结果</div>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;margin-right:6px;">匹配 {result.get('matched_count',0)} 条</span>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;">展示 {result.get('preview_count',0)} 条</span>
+                <div class="tool-card">
+                    <div class="tool-title">数据库筛选结果</div>
+                    <span class="tool-tag">匹配 {result.get('matched_count',0)} 条</span>
+                    <span class="tool-tag">展示 {result.get('preview_count',0)} 条</span>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -1019,10 +1047,10 @@ def render_tool_result(tool_name: str, result: Dict[str, Any]):
         else:
             st.markdown(
                 f"""
-                <div style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:10px 12px;margin:8px 0 10px 0;">
-                    <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#1f2937;">分组统计结果</div>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;margin-right:6px;">{result.get('group_by','-')}</span>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;">{result.get('metric','-')} · {result.get('agg','-')}</span>
+                <div class="tool-card">
+                    <div class="tool-title">分组统计结果</div>
+                    <span class="tool-tag">{result.get('group_by','-')}</span>
+                    <span class="tool-tag">{result.get('metric','-')} · {result.get('agg','-')}</span>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -1037,10 +1065,10 @@ def render_tool_result(tool_name: str, result: Dict[str, Any]):
         else:
             st.markdown(
                 f"""
-                <div style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:10px 12px;margin:8px 0 10px 0;">
-                    <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#1f2937;">字段说明</div>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;margin-right:6px;">{result.get('field_name','-')}</span>
-                    <span style="display:inline-block;font-size:11px;padding:3px 10px;border-radius:999px;background:#eef4ff;color:#3156a6;border:1px solid #dbe6ff;">{result.get('dtype','-')}</span>
+                <div class="tool-card">
+                    <div class="tool-title">字段说明</div>
+                    <span class="tool-tag">{result.get('field_name','-')}</span>
+                    <span class="tool-tag">{result.get('dtype','-')}</span>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -1169,7 +1197,6 @@ try:
             sheet_names = get_excel_sheet_names_from_bytes(st.session_state.db_file_bytes)
             if not st.session_state.db_sheet_name or st.session_state.db_sheet_name not in sheet_names:
                 st.session_state.db_sheet_name = sheet_names[0]
-
             if len(sheet_names) > 1:
                 with st.sidebar:
                     st.session_state.db_sheet_name = st.selectbox(
@@ -1177,7 +1204,6 @@ try:
                         sheet_names,
                         index=sheet_names.index(st.session_state.db_sheet_name),
                     )
-
             df_main = load_dataframe_from_bytes(
                 st.session_state.db_file_bytes,
                 st.session_state.db_file_name,
@@ -1196,7 +1222,6 @@ try:
                 sheet_names = get_excel_sheet_names_from_path(local_path)
                 if not st.session_state.db_sheet_name or st.session_state.db_sheet_name not in sheet_names:
                     st.session_state.db_sheet_name = sheet_names[0]
-
                 if len(sheet_names) > 1:
                     with st.sidebar:
                         st.session_state.db_sheet_name = st.selectbox(
@@ -1218,7 +1243,7 @@ st.session_state.active_db_name = current_db_name
 # =========================
 # 主布局
 # =========================
-left_col, right_col = st.columns([4.6, 1.7], gap="large")
+left_col, right_col = st.columns([4.2, 1.85], gap="large")
 
 # -------------------------
 # 左侧主工作区
@@ -1483,24 +1508,25 @@ with left_col:
 # 右侧：完整聊天面板
 # -------------------------
 with right_col:
-    st.markdown('<div class="agent-panel">', unsafe_allow_html=True)
+    st.markdown('<div class="chat-shell">', unsafe_allow_html=True)
 
     st.markdown(
         """
-        <div style="margin-bottom:10px;">
-            <span class="agent-chip">SMU-Agent</span>
-            <span class="agent-chip">智能研究助手</span>
-        </div>
-        <div class="agent-title">你好，今天你有什么想法？</div>
-        <div class="agent-sub">
-            你可以直接提问，也可以点下面这些建议问题。右边这一整栏就是你的专属聊天区。
+        <div class="chat-topline">
+            <div class="chat-badge">SMU-Agent</div>
+            <div class="chat-badge">智能研究助手</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # 建议问题区
-    st.markdown('<div class="agent-box">', unsafe_allow_html=True)
+    if len(st.session_state.messages) == 0:
+        st.markdown('<div class="chat-greeting">你好，今天你有什么想法？</div>', unsafe_allow_html=True)
+        st.markdown('<div class="chat-hint">你可以直接提问，也可以点下面这些建议问题。右边这一整栏就是你的专属聊天区。</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="chat-greeting" style="font-size:22px;">SMU-Agent 对话中</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="suggest-wrap">', unsafe_allow_html=True)
     s1, s2 = st.columns(2)
     if s1.button("创建此页摘要", use_container_width=True):
         queue_prompt("请根据当前页面已有信息，帮我做一个简要摘要")
@@ -1514,49 +1540,48 @@ with right_col:
         queue_prompt("如果我想提高包封率，可以从哪些方向优化？")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+    st.markdown('<div class="chat-history">', unsafe_allow_html=True)
+    if not st.session_state.messages:
+        st.markdown(
+            """
+            <div style="color:#6b7280;font-size:13px;line-height:1.8;padding:10px 2px;">
+            这里会显示你和 SMU-Agent 的对话记录。<br>
+            你可以问它：
+            <ul>
+                <li>为什么我的体系出现白色沉淀？</li>
+                <li>帮我筛选粒径小于 100 nm 的样本</li>
+                <li>按 apo_type 统计平均粒径</li>
+                <li>解释一下 PDI / EE_Percent 字段</li>
+                <li>帮我设计几组高包封率参数</li>
+            </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        for msg in st.session_state.messages:
+            render_message(msg["role"], msg["content"])
+            if msg.get("tool_logs"):
+                for log in msg["tool_logs"]:
+                    render_tool_result(log["tool"], log["result"])
+                with st.expander("查看本轮工具调用详情"):
+                    st.json(msg["tool_logs"])
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # 聊天记录区
-    chat_history = st.container(border=True)
-    with chat_history:
-        if not st.session_state.messages:
-            st.markdown(
-                """
-这里会显示你和 **SMU-Agent** 的对话记录。
-
-你可以问它：
-- 为什么我的体系会出现白色沉淀？
-- 帮我筛选粒径小于 100 nm 的样本
-- 按 `apo_type` 统计平均粒径
-- 解释一下 `PDI` / `EE_Percent` 字段
-- 帮我设计几组高包封率参数
-                """
-            )
-        else:
-            for msg in st.session_state.messages:
-                render_chat_message(msg["role"], msg["content"])
-                if msg.get("tool_logs"):
-                    for log in msg["tool_logs"]:
-                        render_tool_result(log["tool"], log["result"])
-                    with st.expander("查看本轮工具调用详情"):
-                        st.json(msg["tool_logs"])
-
-    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-
-    # 输入区
-    st.markdown('<div class="agent-input-box">', unsafe_allow_html=True)
-    with st.form("smu_agent_chat_form", clear_on_submit=True):
+    st.markdown('<div class="input-shell">', unsafe_allow_html=True)
+    with st.form("chat_form", clear_on_submit=True):
         user_text = st.text_area(
             "输入问题",
             placeholder="向 SMU-Agent 发送消息，例如：帮我筛选 apo_type=22A 且粒径小于100nm 的样本",
-            height=95,
+            height=90,
             label_visibility="collapsed",
         )
-        b1, b2 = st.columns(2)
+        b1, b2 = st.columns([1, 1])
         send_btn = b1.form_submit_button("发送", use_container_width=True)
         clear_btn = b2.form_submit_button("清空聊天", use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
+    # 处理按钮
     if clear_btn:
         st.session_state.messages = []
         st.rerun()
@@ -1571,7 +1596,7 @@ with right_col:
     if prompt_to_run:
         st.session_state.messages.append({"role": "user", "content": prompt_to_run})
 
-        with st.status("SMU-Agent 正在分析并调用工具……", expanded=True) as status:
+        with st.status("SMU-Agent 正在思考并调用工具……", expanded=True) as status:
             result = run_agent(prompt_to_run)
             answer = result.get("answer", "")
             tool_logs = result.get("tool_logs", [])
