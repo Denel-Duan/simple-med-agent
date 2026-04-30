@@ -699,11 +699,55 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
                 "N/A": None,
             })
 
-    numeric_hint_cols = []
-    for col in df.columns:
-        lc = str(col).lower()
-        if any(k in lc for k in ["ratio", "percent", "size", "pdi", "zeta", "ph_", "ph", "time", "temp", "ee", "dl"]):
-            numeric_hint_cols.append(col)
+    # 只转换真正的数值字段。不能用 "ph" 这类宽泛关键字，否则 phos_1_type 会被误判为数值列，
+    # DMPC / POPC 等磷脂名称会被强制转成 NaN，最终导致图表提示“字段暂无有效数据”。
+    def _is_numeric_data_column(col_name: str) -> bool:
+        lc = str(col_name).strip().lower()
+
+        # 明确保护文本/分类字段
+        if lc in {"ref_id", "formulation_name", "ratio_metric"}:
+            return False
+        if lc.endswith("_type") or lc.endswith("_name"):
+            return False
+        if any(token in lc for token in ["method", "buffer", "shape", "indication", "phase", "ligand", "has_"]):
+            return False
+
+        # 明确数值字段
+        exact_numeric = {
+            "pdi",
+            "zeta_mv",
+            "size_mean_nm",
+            "ee_percent",
+            "dl_percent",
+            "ph_assembly",
+            "num_thermal_cycles",
+        }
+        if lc in exact_numeric:
+            return True
+
+        numeric_suffixes = (
+            "_ratio",
+            "_pct",
+            "_percent",
+            "_c",
+            "_h",
+            "_nm",
+            "_mv",
+        )
+        if lc.endswith(numeric_suffixes):
+            return True
+
+        numeric_prefixes = (
+            "temp_",
+            "time_",
+            "num_",
+        )
+        if lc.startswith(numeric_prefixes):
+            return True
+
+        return False
+
+    numeric_hint_cols = [col for col in df.columns if _is_numeric_data_column(str(col))]
 
     for col in set(numeric_hint_cols):
         try:
@@ -1679,36 +1723,16 @@ def render_overview_tab(df_main: Optional[pd.DataFrame]) -> None:
 
     r1, r2 = st.columns(2)
     if "phos_1_type" in df_main.columns:
-        phos_counts = clean_categorical_series(df_main["phos_1_type"]).value_counts().reset_index()
-        phos_counts.columns = ["phos_1_type", "count"]
-        if phos_counts.empty:
-            r1.info("phos_1_type 字段暂无有效数据。")
-        else:
-            fig = px.bar(
-                phos_counts,
-                x="phos_1_type",
-                y="count",
-                title=f"磷脂类型分布（全部 {len(phos_counts)} 类）",
-            )
-            fig.update_layout(height=max(420, min(900, 28 * len(phos_counts) + 220)))
-            r1.caption(f"统计口径：已读取全部 {len(df_main)} 条记录后统一统计，不再只展示 Top 10。")
-            r1.plotly_chart(style_plotly(fig), use_container_width=True)
+        top_phos = clean_categorical_series(df_main["phos_1_type"]).value_counts().head(10).reset_index()
+        top_phos.columns = ["phos_1_type", "count"]
+        fig = px.bar(top_phos, x="phos_1_type", y="count", title="Top 10 磷脂类型分布")
+        r1.plotly_chart(style_plotly(fig), use_container_width=True)
 
     if "apo_type" in df_main.columns:
-        apo_counts = clean_categorical_series(df_main["apo_type"]).value_counts().reset_index()
-        apo_counts.columns = ["apo_type", "count"]
-        if apo_counts.empty:
-            r2.info("apo_type 字段暂无有效数据。")
-        else:
-            fig = px.bar(
-                apo_counts,
-                x="apo_type",
-                y="count",
-                title=f"Apo 类型分布（全部 {len(apo_counts)} 类）",
-            )
-            fig.update_layout(height=max(420, min(1200, 24 * len(apo_counts) + 240)))
-            r2.caption(f"统计口径：已读取全部 {len(df_main)} 条记录后统一统计，不再只展示 Top 10。")
-            r2.plotly_chart(style_plotly(fig), use_container_width=True)
+        top_apo = clean_categorical_series(df_main["apo_type"]).value_counts().head(10).reset_index()
+        top_apo.columns = ["apo_type", "count"]
+        fig = px.bar(top_apo, x="apo_type", y="count", title="Top 10 Apo 类型分布")
+        r2.plotly_chart(style_plotly(fig), use_container_width=True)
 
     r3, r4 = st.columns(2)
     if "Size_Mean_nm" in df_main.columns and df_main["Size_Mean_nm"].notna().sum() > 0:
@@ -1724,12 +1748,12 @@ def render_overview_tab(df_main: Optional[pd.DataFrame]) -> None:
         if not plot_df.empty:
             color_col = "apo_type" if "apo_type" in plot_df.columns else None
             fig = px.scatter(
-                plot_df,
+                plot_df.head(500),
                 x="Size_Mean_nm",
                 y="PDI",
                 color=color_col,
                 hover_data=[c for c in ["phos_1_type", "EE_Percent", "method_assembly"] if c in plot_df.columns],
-                title=f"粒径 - PDI 散点图（全部 {len(plot_df)} 条有效记录）",
+                title="粒径 - PDI 散点图",
             )
             st.plotly_chart(style_plotly(fig), use_container_width=True)
 
