@@ -19,7 +19,7 @@ from openai import OpenAI
 load_dotenv()
 
 st.set_page_config(
-    page_title="SMU-Agent 医学智能体平台",
+    page_title="仿生rHDL纳米制剂开发助手",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -145,9 +145,9 @@ def init_session_state() -> None:
     defaults = {
         "messages": [],
         "knowledge_text": DEFAULT_KNOWLEDGE,
-        "project_name": "靶向 rHDL 项目",
+        "project_name": "仿生rHDL纳米制剂开发助手",
         "project_type": "处方开发",
-        "project_desc": "围绕 rHDL / 纳米制剂体系，进行文献知识检索、数据库筛选、参数预测和逆向推荐。",
+        "project_desc": "围绕仿生rHDL纳米制剂，进行文献知识检索、数据库筛选、理化参数预测和处方工艺逆向推荐。",
         "pending_prompt": None,
         "db_file_bytes": None,
         "db_file_name": None,
@@ -159,6 +159,12 @@ def init_session_state() -> None:
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+    # 旧版本会话兼容：如果浏览器里还保留旧项目名/简介，自动迁移到新版文案。
+    if st.session_state.get("project_name") in ["靶向 rHDL 项目", "靶向tHDL项目", "靶向 tHDL 项目"]:
+        st.session_state.project_name = "仿生rHDL纳米制剂开发助手"
+    if st.session_state.get("project_desc") == "围绕 rHDL / 纳米制剂体系，进行文献知识检索、数据库筛选、参数预测和逆向推荐。":
+        st.session_state.project_desc = "围绕仿生rHDL纳米制剂，进行文献知识检索、数据库筛选、理化参数预测和处方工艺逆向推荐。"
 
 
 # =========================
@@ -532,25 +538,184 @@ def get_excel_sheet_names_from_path(path: str) -> List[str]:
     return pd.ExcelFile(path).sheet_names
 
 
+def _normalize_column_name(name: Any) -> str:
+    """把 Excel 表头统一成程序内部字段名，避免空格、换行、中文表头导致字段识别失败。"""
+    raw = "" if name is None else str(name)
+    raw = raw.replace("\ufeff", "").replace("\u3000", " ").strip()
+    raw = re.sub(r"[\r\n\t]+", "_", raw)
+    raw = re.sub(r"\s+", "_", raw)
+    raw = raw.replace("-", "_")
+    raw = re.sub(r"_+", "_", raw).strip("_")
+
+    key = raw.lower()
+    key_compact = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", key)
+
+    aliases = {
+        "refid": "ref_id",
+        "编号": "ref_id",
+        "文献编号": "ref_id",
+        "处方名称": "formulation_name",
+        "配方名称": "formulation_name",
+        "formulationname": "formulation_name",
+        "phos1type": "phos_1_type",
+        "phos_1_type": "phos_1_type",
+        "phospholipid1type": "phos_1_type",
+        "主磷脂类型": "phos_1_type",
+        "磷脂1类型": "phos_1_type",
+        "磷脂类型": "phos_1_type",
+        "phos1ratio": "phos_1_ratio",
+        "phos_1_ratio": "phos_1_ratio",
+        "主磷脂比例": "phos_1_ratio",
+        "磷脂1比例": "phos_1_ratio",
+        "phos2type": "phos_2_type",
+        "phos_2_type": "phos_2_type",
+        "第二磷脂类型": "phos_2_type",
+        "phos2ratio": "phos_2_ratio",
+        "phos_2_ratio": "phos_2_ratio",
+        "第二磷脂比例": "phos_2_ratio",
+        "cholratio": "chol_ratio",
+        "cholesterolratio": "chol_ratio",
+        "胆固醇比例": "chol_ratio",
+        "apotype": "apo_type",
+        "apo_type": "apo_type",
+        "载脂蛋白类型": "apo_type",
+        "载脂蛋白": "apo_type",
+        "aporatio": "apo_ratio",
+        "apo_ratio": "apo_ratio",
+        "载脂蛋白比例": "apo_ratio",
+        "methodassembly": "method_assembly",
+        "method_assembly": "method_assembly",
+        "组装方法": "method_assembly",
+        "shapeobserved": "Shape_Observed",
+        "shape_observed": "Shape_Observed",
+        "形貌": "Shape_Observed",
+        "观察形貌": "Shape_Observed",
+        "sizemeannm": "Size_Mean_nm",
+        "size_mean_nm": "Size_Mean_nm",
+        "平均粒径nm": "Size_Mean_nm",
+        "粒径nm": "Size_Mean_nm",
+        "粒径": "Size_Mean_nm",
+        "pdi": "PDI",
+        "zetamv": "Zeta_mV",
+        "zeta_mv": "Zeta_mV",
+        "zeta电位": "Zeta_mV",
+        "eepercent": "EE_Percent",
+        "ee_percent": "EE_Percent",
+        "ee": "EE_Percent",
+        "ee%": "EE_Percent",
+        "包封率": "EE_Percent",
+        "包封率%": "EE_Percent",
+        "dlpercent": "DL_Percent",
+        "dl_percent": "DL_Percent",
+        "载药量": "DL_Percent",
+        "载药量%": "DL_Percent",
+        "indication": "Indication",
+        "适应症": "Indication",
+        "应用方向": "Indication",
+    }
+
+    if key in aliases:
+        return aliases[key]
+    if key_compact in aliases:
+        return aliases[key_compact]
+    return raw
+
+
+def _deduplicate_columns(columns: List[str]) -> List[str]:
+    counts: Dict[str, int] = {}
+    out: List[str] = []
+    for col in columns:
+        base = str(col).strip() or "column"
+        if base not in counts:
+            counts[base] = 0
+            out.append(base)
+        else:
+            counts[base] += 1
+            out.append(f"{base}_{counts[base]}")
+    return out
+
+
+def clean_categorical_series(series: pd.Series) -> pd.Series:
+    """清理分类字段，过滤 none/null/空字符串，避免统计和图表被脏值干扰。"""
+    s = series.copy()
+    s = s.where(pd.notnull(s), None)
+    s = s.astype(str).str.strip()
+    s = s.replace({
+        "": None,
+        "nan": None,
+        "NaN": None,
+        "None": None,
+        "none": None,
+        "NULL": None,
+        "null": None,
+        "NA": None,
+        "N/A": None,
+        "na": None,
+        "无": None,
+        "无具体信息": None,
+        "0": None,
+        "0.0": None,
+    })
+    return s.dropna()
+
+
+def nonempty_nunique(df: pd.DataFrame, col: str) -> int:
+    if col not in df.columns:
+        return 0
+    return int(clean_categorical_series(df[col]).nunique())
+
+
 def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
-    df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
+
+    # 如果 Excel 被错误读取成“第一行是字段名、真正表头在数据行”，自动重新识别表头。
+    expected = {"phos_1_type", "apo_type", "Size_Mean_nm", "PDI", "EE_Percent"}
+    normalized_cols = [_normalize_column_name(c) for c in df.columns]
+    if len(expected.intersection(set(normalized_cols))) < 2 and len(df) > 0:
+        max_scan_rows = min(8, len(df))
+        for i in range(max_scan_rows):
+            candidate = [_normalize_column_name(v) for v in df.iloc[i].tolist()]
+            if len(expected.intersection(set(candidate))) >= 2:
+                df = df.iloc[i + 1:].reset_index(drop=True)
+                df.columns = candidate
+                break
+
+    df.columns = _deduplicate_columns([_normalize_column_name(c) for c in df.columns])
+    df = df.loc[:, ~pd.Index(df.columns).astype(str).str.startswith("Unnamed")]
     df = df.dropna(axis=1, how="all")
 
     for col in df.columns:
         if df[col].dtype == "object":
             df[col] = df[col].astype(str).str.strip()
-            df[col] = df[col].replace({"": None, "nan": None, "None": None})
+            df[col] = df[col].replace({
+                "": None,
+                "nan": None,
+                "NaN": None,
+                "None": None,
+                "none": None,
+                "NULL": None,
+                "null": None,
+                "NA": None,
+                "N/A": None,
+            })
 
     numeric_hint_cols = []
     for col in df.columns:
-        lc = col.lower()
+        lc = str(col).lower()
         if any(k in lc for k in ["ratio", "percent", "size", "pdi", "zeta", "ph_", "ph", "time", "temp", "ee", "dl"]):
             numeric_hint_cols.append(col)
 
     for col in set(numeric_hint_cols):
         try:
+            if df[col].dtype == "object":
+                df[col] = (
+                    df[col]
+                    .astype(str)
+                    .str.replace("−", "-", regex=False)
+                    .str.replace("–", "-", regex=False)
+                    .str.replace("%", "", regex=False)
+                    .str.extract(r"([-+]?\d*\.?\d+)", expand=False)
+                )
             df[col] = pd.to_numeric(df[col], errors="coerce")
         except Exception:
             pass
@@ -1103,8 +1268,8 @@ TOOLS = [
 ]
 
 BASE_SYSTEM_PROMPT = """
-你是一个中文科研智能体助手，名字叫 SMU-Agent。
-你服务于一个医学/药剂学实验平台。
+你是一个中文科研智能体助手，名字叫 纳米制剂开发助手。
+你服务于一个中药药剂学实验平台。
 
 规则：
 1. 用户涉及知识检索、经验总结、故障诊断时，优先调用 search_knowledge。
@@ -1290,9 +1455,9 @@ def render_sidebar() -> None:
     with st.sidebar:
         st.markdown(
             """
-            <div style="font-size:22px;font-weight:900;margin-bottom:4px;">SMU-Agent</div>
+            <div style="font-size:22px;font-weight:900;margin-bottom:4px;">纳米制剂开发助手</div>
             <div style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:12px;">
-            面向医学/药剂学实验场景的智能体平台原型
+            面向中药药剂学实验场景的智能体平台原型
             </div>
             """,
             unsafe_allow_html=True,
@@ -1500,8 +1665,8 @@ def render_header(df_main: Optional[pd.DataFrame]) -> None:
             ("字段数", len(df_main.columns)),
             ("有效粒径数", int(df_main["Size_Mean_nm"].notna().sum()) if "Size_Mean_nm" in df_main.columns else 0),
             ("有效EE数", int(df_main["EE_Percent"].notna().sum()) if "EE_Percent" in df_main.columns else 0),
-            ("磷脂类型数", int(df_main["phos_1_type"].nunique()) if "phos_1_type" in df_main.columns else 0),
-            ("Apo类型数", int(df_main["apo_type"].nunique()) if "apo_type" in df_main.columns else 0),
+            ("磷脂类型数", nonempty_nunique(df_main, "phos_1_type")),
+            ("Apo类型数", nonempty_nunique(df_main, "apo_type")),
         ]
         for col, (label, value) in zip(metric_cols, metric_items):
             col.metric(label, value)
@@ -1514,13 +1679,13 @@ def render_overview_tab(df_main: Optional[pd.DataFrame]) -> None:
 
     r1, r2 = st.columns(2)
     if "phos_1_type" in df_main.columns:
-        top_phos = df_main["phos_1_type"].dropna().astype(str).value_counts().head(10).reset_index()
+        top_phos = clean_categorical_series(df_main["phos_1_type"]).value_counts().head(10).reset_index()
         top_phos.columns = ["phos_1_type", "count"]
         fig = px.bar(top_phos, x="phos_1_type", y="count", title="Top 10 磷脂类型分布")
         r1.plotly_chart(style_plotly(fig), use_container_width=True)
 
     if "apo_type" in df_main.columns:
-        top_apo = df_main["apo_type"].dropna().astype(str).value_counts().head(10).reset_index()
+        top_apo = clean_categorical_series(df_main["apo_type"]).value_counts().head(10).reset_index()
         top_apo.columns = ["apo_type", "count"]
         fig = px.bar(top_apo, x="apo_type", y="count", title="Top 10 Apo 类型分布")
         r2.plotly_chart(style_plotly(fig), use_container_width=True)
@@ -1555,10 +1720,10 @@ def render_datawork_tab(df_main: Optional[pd.DataFrame]) -> None:
         return
 
     st.markdown("#### 条件筛选")
-    phos_options = ["全部"] + sorted(df_main["phos_1_type"].dropna().astype(str).unique().tolist()) if "phos_1_type" in df_main.columns else ["全部"]
-    apo_options = ["全部"] + sorted(df_main["apo_type"].dropna().astype(str).unique().tolist()) if "apo_type" in df_main.columns else ["全部"]
-    ind_options = ["全部"] + sorted(df_main["Indication"].dropna().astype(str).unique().tolist()) if "Indication" in df_main.columns else ["全部"]
-    method_options = ["全部"] + sorted(df_main["method_assembly"].dropna().astype(str).unique().tolist()) if "method_assembly" in df_main.columns else ["全部"]
+    phos_options = ["全部"] + sorted(clean_categorical_series(df_main["phos_1_type"]).unique().tolist()) if "phos_1_type" in df_main.columns else ["全部"]
+    apo_options = ["全部"] + sorted(clean_categorical_series(df_main["apo_type"]).unique().tolist()) if "apo_type" in df_main.columns else ["全部"]
+    ind_options = ["全部"] + sorted(clean_categorical_series(df_main["Indication"]).unique().tolist()) if "Indication" in df_main.columns else ["全部"]
+    method_options = ["全部"] + sorted(clean_categorical_series(df_main["method_assembly"]).unique().tolist()) if "method_assembly" in df_main.columns else ["全部"]
 
     f1, f2, f3, f4 = st.columns(4)
     with f1:
@@ -1745,7 +1910,7 @@ def render_experiment_tab() -> None:
             m2.metric("预测粒径(nm)", pred["预测粒径(nm)"])
             m3.metric("预测PDI", pred["预测PDI"])
 
-            if st.button("让 SMU-Agent 分析这组参数", use_container_width=True, key="exp_explain_params_btn"):
+            if st.button("让 纳米制剂开发助手 分析这组参数", use_container_width=True, key="exp_explain_params_btn"):
                 queue_prompt(
                     f"请分析这组参数的表现：lipid_ratio={lipid_ratio}, protein_ratio={protein_ratio}, temperature={temperature}, time_min={time_min}"
                 )
@@ -1798,7 +1963,7 @@ def render_knowledge_tab(df_main: Optional[pd.DataFrame]) -> None:
         if qa1.button("检索知识库", use_container_width=True, key="knowledge_search_btn"):
             result = search_knowledge_impl(q, top_k=6)
             render_tool_result("search_knowledge", result)
-        if qa2.button("交给 SMU-Agent", use_container_width=True, key="knowledge_send_to_agent_btn"):
+        if qa2.button("交给 纳米制剂开发助手", use_container_width=True, key="knowledge_send_to_agent_btn"):
             queue_prompt(q)
 
         st.metric("知识条目数", len([x for x in st.session_state.knowledge_text.splitlines() if x.strip()]))
@@ -1812,7 +1977,7 @@ def render_knowledge_tab(df_main: Optional[pd.DataFrame]) -> None:
             field_name = st.selectbox("选择一个字段", df_main.columns.tolist(), key="knowledge_field_select")
             result = explain_database_field_impl(field_name)
             render_tool_result("explain_database_field", result)
-            if st.button("让 SMU-Agent 解释这个字段", use_container_width=True, key="knowledge_explain_field_btn"):
+            if st.button("让 纳米制剂开发助手 解释这个字段", use_container_width=True, key="knowledge_explain_field_btn"):
                 queue_prompt(f"请解释一下字段 {field_name} 的含义，并说明它在当前数据库里有什么作用")
 
 
@@ -1856,7 +2021,7 @@ def render_chat_panel() -> None:
         """
         <div class="copilot-topbar">
             <div>
-                <span class="copilot-chip">SMU-Agent</span>
+                <span class="copilot-chip">纳米制剂开发助手</span>
                 <span class="copilot-chip">智能研究助手</span>
             </div>
             <div style="font-size:12px;color:var(--muted);">Chat</div>
@@ -1872,7 +2037,7 @@ def render_chat_panel() -> None:
                 """
                 <div class="copilot-title">你好，今天你有什么想法？</div>
                 <div class="copilot-sub">
-                    这里就是 SMU-Agent 的专属聊天区。你可以直接提问，
+                    这里就是 纳米制剂开发助手 的专属聊天区。你可以直接提问，
                     也可以从下面这些建议开始。
                 </div>
                 """,
@@ -1921,7 +2086,7 @@ def render_chat_panel() -> None:
     with st.form("smu_agent_chat_form", clear_on_submit=True):
         user_text = st.text_area(
             "输入问题",
-            placeholder="向 SMU-Agent 发送消息，例如：帮我筛选 apo_type=22A 且粒径小于100nm 的样本",
+            placeholder="向 纳米制剂开发助手 发送消息，例如：帮我筛选 apo_type=22A 且粒径小于100nm 的样本",
             label_visibility="collapsed",
             height=92,
             key="right_chat_input_textarea",
@@ -1946,7 +2111,7 @@ def render_chat_panel() -> None:
 
     if prompt_to_run:
         st.session_state.messages.append({"role": "user", "content": prompt_to_run})
-        with st.status("SMU-Agent 正在分析并调用工具……", expanded=True) as status:
+        with st.status("纳米制剂开发助手 正在分析并调用工具……", expanded=True) as status:
             result = run_agent(prompt_to_run)
             answer = result.get("answer", "")
             tool_logs = result.get("tool_logs", [])
