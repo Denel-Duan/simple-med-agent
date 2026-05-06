@@ -6,3 +6,5 @@ plotly
 openpyxl
 scikit-learn
 joblib
+catboost
+optuna
