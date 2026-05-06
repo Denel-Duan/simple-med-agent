@@ -8,10 +8,33 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from openai import OpenAI
+
+try:
+    from sklearn.metrics import r2_score, mean_absolute_error
+    from sklearn.model_selection import train_test_split
+    SKLEARN_AVAILABLE = True
+except Exception:
+    SKLEARN_AVAILABLE = False
+
+try:
+    from catboost import CatBoostRegressor, Pool
+    CATBOOST_AVAILABLE = True
+except Exception:
+    CatBoostRegressor = None
+    Pool = None
+    CATBOOST_AVAILABLE = False
+
+try:
+    import optuna
+    OPTUNA_AVAILABLE = True
+except Exception:
+    optuna = None
+    OPTUNA_AVAILABLE = False
 
 # =========================
 # 基础配置
@@ -113,28 +136,33 @@ THEME_CONFIG = {
         "grid": "#d9e2ef",
     },
     "深色": {
-        "bg": "#0b1220",
-        "bg_grad_1": "#0b1220",
-        "bg_grad_2": "#111827",
-        "card": "#111827",
-        "card_alt": "#172033",
-        "line": "#263244",
-        "text": "#e5e7eb",
-        "muted": "#94a3b8",
-        "sidebar_1": "#0b1220",
-        "sidebar_2": "#111827",
-        "hero_1": "#111827",
-        "hero_2": "#172033",
-        "chat_1": "#131a27",
-        "chat_2": "#0f172a",
-        "chat_line": "#2a3447",
-        "chip_bg": "#1f2937",
-        "chip_line": "#334155",
-        "chip_text": "#cbd5e1",
-        "accent": "#60a5fa",
-        "accent_soft": "rgba(96,165,250,0.10)",
-        "input_bg": "#0f172a",
-        "grid": "#334155",
+        "bg": "#07111F",
+        "bg_grad_1": "#07111F",
+        "bg_grad_2": "#0B1F2F",
+        "card": "#0E1B2A",
+        "card_alt": "#13283A",
+        "line": "#20384D",
+        "text": "#EAF2F8",
+        "muted": "#9CB3C9",
+        "sidebar_1": "#081524",
+        "sidebar_2": "#0C2233",
+        "hero_1": "#0E7490",
+        "hero_2": "#2563EB",
+        "hero_3": "#4F46E5",
+        "chat_1": "#0C1C2C",
+        "chat_2": "#102A3D",
+        "chat_line": "#24465F",
+        "chip_bg": "#12344A",
+        "chip_line": "#1E5B78",
+        "chip_text": "#BDEBFF",
+        "accent": "#22D3EE",
+        "accent_2": "#38BDF8",
+        "accent_3": "#2DD4BF",
+        "accent_soft": "rgba(34,211,238,0.12)",
+        "input_bg": "#0B1F2F",
+        "button_bg": "#12344A",
+        "button_hover": "#155E75",
+        "grid": "#1E3A4C",
     },
 }
 
@@ -155,6 +183,10 @@ def init_session_state() -> None:
         "active_df": None,
         "active_db_name": "未加载",
         "theme_mode": "浅色",
+        "active_page": "首页概览",
+        "ml_training_bundle": None,
+        "ml_training_summary": None,
+        "ml_recommendation_df": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -172,7 +204,238 @@ def init_session_state() -> None:
 # =========================
 def apply_theme_css(theme_name: str) -> None:
     cfg = THEME_CONFIG.get(theme_name, THEME_CONFIG["浅色"])
-    chat_title = "#1f1f1f" if theme_name == "浅色" else "#e5e7eb"
+    chat_title = "#1f1f1f" if theme_name == "浅色" else "#EAF2F8"
+
+    dark_override = """
+/* =========================
+   Deep biomedical theme override
+   Professional blue-black + cyan/teal scientific glow.
+   ========================= */
+.stApp {
+    background:
+        radial-gradient(circle at 8% 8%, rgba(34,211,238,0.14) 0, transparent 30%),
+        radial-gradient(circle at 90% 10%, rgba(45,212,191,0.10) 0, transparent 28%),
+        radial-gradient(circle at 55% 95%, rgba(99,102,241,0.10) 0, transparent 34%),
+        linear-gradient(180deg, #07111F 0%, #0B1F2F 55%, #07111F 100%) !important;
+    color: #EAF2F8 !important;
+}
+
+.main .block-container {
+    background: transparent !important;
+}
+
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #081524 0%, #0C2233 100%) !important;
+    border-right: 1px solid #20384D !important;
+}
+
+.sidebar-card,
+div[data-testid="stMetric"],
+.home-stat-card,
+.soft-card,
+.soft-panel,
+.module-head,
+.quick-card,
+.capture-box,
+.nav-panel,
+.feature-card {
+    background: rgba(14, 27, 42, 0.88) !important;
+    border: 1px solid #20384D !important;
+    box-shadow: 0 16px 38px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.035) !important;
+    backdrop-filter: blur(12px) !important;
+}
+
+.sidebar-title,
+.soft-title,
+.section-title,
+.panel-title,
+.feature-title,
+.module-title,
+.feature-grid-title,
+.home-stat-value,
+.hero-title,
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] span,
+label,
+.stCaption,
+.stText {
+    color: #EAF2F8 !important;
+}
+
+.sidebar-desc,
+.hero-sub,
+.section-sub,
+.panel-note,
+.feature-desc,
+.module-sub,
+.feature-grid-sub,
+.home-stat-label,
+.copilot-sub,
+.copilot-hint,
+.chat-composer-caption {
+    color: #9CB3C9 !important;
+}
+
+.hero {
+    background:
+        radial-gradient(circle at 90% -10%, rgba(255,255,255,0.14) 0, transparent 38%),
+        linear-gradient(135deg, #0E7490 0%, #2563EB 58%, #4F46E5 100%) !important;
+    border: 1px solid rgba(34,211,238,0.18) !important;
+    box-shadow: 0 22px 52px rgba(37,99,235,0.26), 0 8px 20px rgba(34,211,238,0.12) !important;
+}
+.hero-sub,
+.hero-sub b { color: rgba(234,242,248,0.96) !important; }
+.hero:after {
+    background: rgba(7,17,31,0.32) !important;
+    border-color: rgba(189,235,255,0.26) !important;
+    color: #EAF2F8 !important;
+}
+
+.feature-card:before { height: 7px !important; }
+.feature-card-0:before { background: linear-gradient(90deg,#22D3EE,#2DD4BF) !important; }
+.feature-card-1:before { background: linear-gradient(90deg,#38BDF8,#2563EB) !important; }
+.feature-card-2:before { background: linear-gradient(90deg,#6366F1,#22D3EE) !important; }
+.feature-card-3:before { background: linear-gradient(90deg,#2DD4BF,#0E7490) !important; }
+.feature-card-4:before { background: linear-gradient(90deg,#64748B,#6366F1) !important; }
+.feature-card:hover {
+    border-color: rgba(34,211,238,0.38) !important;
+    box-shadow: 0 24px 56px rgba(0,0,0,0.32), 0 0 0 1px rgba(34,211,238,0.10) !important;
+}
+.feature-icon,
+.feature-grid-title:before {
+    background: linear-gradient(135deg, rgba(34,211,238,0.16), rgba(45,212,191,0.12)) !important;
+    color: #22D3EE !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 22px rgba(34,211,238,0.10) !important;
+}
+
+.home-stat-card:before {
+    background: linear-gradient(180deg,#22D3EE,#2563EB) !important;
+}
+.home-stat-value { color: #38BDF8 !important; }
+
+.nav-panel {
+    background: rgba(14, 27, 42, 0.76) !important;
+    border: 1px solid #20384D !important;
+    box-shadow: 0 14px 32px rgba(0,0,0,0.22) !important;
+}
+.nav-panel [data-testid="stBaseButton-primary"],
+.copilot-shell [data-testid="stFormSubmitButton"] button {
+    background: linear-gradient(135deg, #0E7490 0%, #2563EB 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    box-shadow: 0 12px 28px rgba(34,211,238,0.22) !important;
+}
+.nav-panel [data-testid="stBaseButton-secondary"],
+.stButton > button,
+.stDownloadButton > button,
+[data-testid="stFormSubmitButton"] button,
+.copilot-card [data-testid="stBaseButton-secondary"] {
+    background: rgba(18, 52, 74, 0.86) !important;
+    border: 1px solid #24465F !important;
+    color: #EAF2F8 !important;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.04) !important;
+}
+.stButton > button:hover,
+.stDownloadButton > button:hover,
+[data-testid="stFormSubmitButton"] button:hover,
+.copilot-card [data-testid="stBaseButton-secondary"]:hover {
+    background: #155E75 !important;
+    border-color: rgba(34,211,238,0.55) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 12px 28px rgba(34,211,238,0.17) !important;
+}
+
+section[data-testid="stSidebar"] .stTextInput input,
+section[data-testid="stSidebar"] .stTextArea textarea,
+section[data-testid="stSidebar"] .stNumberInput input,
+section[data-testid="stSidebar"] [data-baseweb="select"] > div,
+.stTextArea textarea,
+.stTextInput input,
+.stNumberInput input,
+.copilot-shell .stTextArea textarea {
+    background: rgba(11,31,47,0.94) !important;
+    border: 1px solid #24465F !important;
+    color: #EAF2F8 !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 8px 20px rgba(0,0,0,0.16) !important;
+}
+section[data-testid="stSidebar"] .stTextInput input:focus,
+section[data-testid="stSidebar"] .stTextArea textarea:focus,
+section[data-testid="stSidebar"] .stNumberInput input:focus,
+.copilot-shell .stTextArea textarea:focus {
+    border-color: rgba(34,211,238,0.60) !important;
+    box-shadow: 0 0 0 3px rgba(34,211,238,0.13), inset 0 1px 0 rgba(255,255,255,0.045) !important;
+}
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+    background: rgba(11,31,47,0.70) !important;
+    border: 1px dashed rgba(45,212,191,0.35) !important;
+}
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button {
+    background: rgba(18,52,74,0.95) !important;
+    color: #BDEBFF !important;
+    border: 1px solid #24465F !important;
+}
+section[data-testid="stSidebar"] [role="radiogroup"] label {
+    background: rgba(18,52,74,0.62) !important;
+    border: 1px solid #24465F !important;
+    color: #EAF2F8 !important;
+}
+
+.copilot-card {
+    background: linear-gradient(180deg, rgba(12,28,44,0.96) 0%, rgba(16,42,61,0.94) 100%) !important;
+    border: 1px solid #24465F !important;
+    box-shadow: 0 18px 44px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.04) !important;
+}
+.copilot-title { color: #EAF2F8 !important; }
+.copilot-chip {
+    background: #12344A !important;
+    border-color: #1E5B78 !important;
+    color: #BDEBFF !important;
+}
+.copilot-divider { background: #24465F !important; }
+.copilot-shell [data-testid="stForm"] {
+    background: rgba(11,31,47,0.70) !important;
+    border: 1px solid #24465F !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.035) !important;
+}
+.copilot-shell .stTextArea textarea {
+    background: rgba(11,31,47,0.48) !important;
+    border: none !important;
+    color: #EAF2F8 !important;
+}
+.chat-clear-row [data-testid="stBaseButton-secondary"] {
+    background: rgba(18,52,74,0.66) !important;
+    border: 1px solid #24465F !important;
+    color: #9CB3C9 !important;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+    background: rgba(14,27,42,0.68) !important;
+    border: 1px solid #20384D !important;
+}
+button[data-baseweb="tab"] {
+    background: rgba(18,52,74,0.72) !important;
+    color: #B8C7D9 !important;
+    border: 1px solid #24465F !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #FFFFFF !important;
+    background: linear-gradient(135deg, #0E7490 0%, #2563EB 100%) !important;
+    border-bottom-color: #22D3EE !important;
+}
+
+[data-testid="stDataFrame"] {
+    background: #0E1B2A !important;
+    border: 1px solid #20384D !important;
+}
+
+/* Streamlit status/info boxes: make them less glaring in dark mode. */
+[data-testid="stAlert"] {
+    background: rgba(18,52,74,0.72) !important;
+    color: #EAF2F8 !important;
+    border: 1px solid #24465F !important;
+}
+""" if theme_name == "深色" else ""
 
     st.markdown(
         f"""
@@ -437,6 +700,551 @@ hr {{ border-color: var(--line); }}
     border-radius: 24px !important;
     padding: 14px 16px !important;
 }}
+
+.feature-grid-title {{
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--text);
+    margin: 4px 0 6px 0;
+}}
+.feature-grid-sub {{
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.8;
+    margin-bottom: 14px;
+}}
+.feature-card {{
+    min-height: 190px;
+    background: linear-gradient(180deg, var(--card) 0%, var(--card-alt) 100%);
+    border: 1px solid var(--line);
+    border-radius: 26px;
+    padding: 22px 22px 18px 22px;
+    box-shadow: 0 12px 34px rgba(15,23,42,0.06);
+    margin-bottom: 10px;
+    position: relative;
+    overflow: hidden;
+}}
+.feature-card:before {{
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 5px;
+    background: linear-gradient(90deg, var(--accent) 0%, #c026d3 100%);
+}}
+.feature-icon {{
+    width: 52px;
+    height: 52px;
+    border-radius: 18px;
+    background: var(--accent-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    margin-bottom: 16px;
+}}
+.feature-title {{
+    font-size: 19px;
+    font-weight: 900;
+    color: var(--text);
+    margin-bottom: 8px;
+}}
+.feature-desc {{
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.8;
+}}
+.home-stat-card {{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+}}
+.home-stat-label {{
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+}}
+.home-stat-value {{
+    font-size: 26px;
+    font-weight: 850;
+    color: var(--text);
+}}
+.module-head {{
+    background: linear-gradient(135deg, var(--card) 0%, var(--card-alt) 100%);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+}}
+.module-title {{
+    font-size: 25px;
+    font-weight: 900;
+    color: var(--text);
+    margin-bottom: 6px;
+}}
+.module-sub {{
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.8;
+}}
+.nav-panel {{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+}}
+
+
+
+/* =========================
+   Refined biomedical product UI layer
+   Reference-inspired, not copied: blue-green scientific SaaS palette.
+   ========================= */
+.stApp {{
+    background:
+        radial-gradient(circle at 10% 8%, rgba(14,165,233,0.13) 0, transparent 30%),
+        radial-gradient(circle at 88% 10%, rgba(20,184,166,0.12) 0, transparent 28%),
+        radial-gradient(circle at 55% 92%, rgba(99,102,241,0.08) 0, transparent 35%),
+        linear-gradient(180deg, #f7fbff 0%, #eef7ff 48%, #f7fbfb 100%) !important;
+}}
+
+.main .block-container {{
+    padding-top: 1.05rem;
+}}
+
+section[data-testid="stSidebar"] {{
+    background:
+        linear-gradient(180deg, rgba(248,251,255,0.98) 0%, rgba(240,249,255,0.98) 52%, rgba(240,253,250,0.96) 100%) !important;
+    border-right: 1px solid rgba(37,99,235,0.12) !important;
+}}
+
+.sidebar-card {{
+    background: rgba(255,255,255,0.76) !important;
+    border: 1px solid rgba(37,99,235,0.13) !important;
+    border-radius: 22px !important;
+    box-shadow: 0 10px 26px rgba(15,76,129,0.06), inset 0 1px 0 rgba(255,255,255,0.78) !important;
+}}
+
+.hero {{
+    background:
+        linear-gradient(135deg, rgba(15,118,110,0.97) 0%, rgba(37,99,235,0.94) 56%, rgba(99,102,241,0.92) 100%) !important;
+    border: none !important;
+    border-radius: 30px !important;
+    padding: 26px 30px !important;
+    box-shadow: 0 18px 46px rgba(37,99,235,0.18), 0 6px 18px rgba(20,184,166,0.10) !important;
+    position: relative;
+    overflow: hidden;
+}}
+.hero:before {{
+    content: "";
+    position: absolute;
+    width: 280px;
+    height: 280px;
+    right: -90px;
+    top: -130px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 999px;
+}}
+.hero:after {{
+    content: "rHDL · Nanoformulation · AI";
+    position: absolute;
+    right: 24px;
+    top: 22px;
+    background: rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.24);
+    color: rgba(255,255,255,0.96);
+    font-size: 12px;
+    font-weight: 800;
+    padding: 7px 13px;
+    border-radius: 999px;
+    backdrop-filter: blur(8px);
+}}
+.hero-title {{
+    color: #ffffff !important;
+    text-shadow: 0 3px 10px rgba(15,23,42,0.18);
+    letter-spacing: 0.2px;
+}}
+.hero-sub {{
+    color: rgba(255,255,255,0.90) !important;
+    max-width: 780px;
+}}
+.hero-sub b {{ color: #ffffff !important; }}
+
+.nav-panel {{
+    background: rgba(255,255,255,0.70) !important;
+    border: 1px solid rgba(37,99,235,0.13) !important;
+    border-radius: 999px !important;
+    padding: 10px 12px !important;
+    box-shadow: 0 10px 28px rgba(30,64,175,0.07) !important;
+    backdrop-filter: blur(12px);
+}}
+.nav-panel + div {{ margin-top: 4px; }}
+
+.nav-panel .stButton > button,
+.stButton > button,
+.stDownloadButton > button {{
+    border-radius: 999px !important;
+    border: 1px solid rgba(37,99,235,0.14) !important;
+    background: rgba(255,255,255,0.84) !important;
+    color: #102033 !important;
+    box-shadow: 0 4px 12px rgba(30,64,175,0.06) !important;
+}}
+.nav-panel .stButton > button:hover,
+.stButton > button:hover,
+.stDownloadButton > button:hover {{
+    transform: translateY(-1px);
+    border-color: rgba(14,165,233,0.52) !important;
+    color: #0369a1 !important;
+    box-shadow: 0 8px 18px rgba(14,165,233,0.13) !important;
+}}
+
+div[data-testid="stMetric"],
+.home-stat-card,
+.soft-card,
+.soft-panel,
+.module-head,
+.quick-card,
+.capture-box {{
+    background: rgba(255,255,255,0.76) !important;
+    border: 1px solid rgba(37,99,235,0.12) !important;
+    box-shadow: 0 12px 30px rgba(15,76,129,0.055), inset 0 1px 0 rgba(255,255,255,0.76) !important;
+    backdrop-filter: blur(10px);
+}}
+
+.feature-grid-title {{
+    font-size: 26px !important;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}}
+.feature-grid-title:before {{
+    content: "◆";
+    color: #0891b2;
+    background: rgba(14,165,233,0.10);
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+}}
+.feature-grid-sub {{ color: #5f6f86 !important; }}
+
+.feature-card {{
+    min-height: 218px !important;
+    background: linear-gradient(180deg, rgba(255,255,255,0.83) 0%, rgba(248,252,255,0.78) 100%) !important;
+    border: 1px solid rgba(37,99,235,0.11) !important;
+    border-radius: 30px !important;
+    box-shadow: 0 16px 36px rgba(15,76,129,0.075) !important;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}}
+.feature-card:hover {{
+    transform: translateY(-4px);
+    border-color: rgba(14,165,233,0.28) !important;
+    box-shadow: 0 22px 48px rgba(15,76,129,0.13) !important;
+}}
+.feature-card:before {{ height: 7px !important; }}
+.feature-card-0:before {{ background: linear-gradient(90deg,#0891b2,#14b8a6) !important; }}
+.feature-card-1:before {{ background: linear-gradient(90deg,#2563eb,#0ea5e9) !important; }}
+.feature-card-2:before {{ background: linear-gradient(90deg,#4f46e5,#22c55e) !important; }}
+.feature-card-3:before {{ background: linear-gradient(90deg,#10b981,#0f766e) !important; }}
+.feature-card-4:before {{ background: linear-gradient(90deg,#64748b,#6366f1) !important; }}
+.feature-icon {{
+    width: 58px !important;
+    height: 58px !important;
+    border-radius: 21px !important;
+    background: linear-gradient(135deg, rgba(14,165,233,0.13), rgba(20,184,166,0.10)) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.80), 0 10px 18px rgba(14,165,233,0.09);
+}}
+.feature-title {{ color: #122033 !important; }}
+.feature-desc {{ color: #607083 !important; }}
+
+.home-stat-card {{
+    border-radius: 22px !important;
+    padding: 16px 18px !important;
+    position: relative;
+    overflow: hidden;
+}}
+.home-stat-card:before {{
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 5px;
+    height: 100%;
+    background: linear-gradient(180deg,#0891b2,#2563eb);
+}}
+.home-stat-value {{ color: #0369a1 !important; }}
+
+.module-head {{
+    background: linear-gradient(135deg, rgba(255,255,255,0.82) 0%, rgba(239,246,255,0.78) 52%, rgba(240,253,250,0.74) 100%) !important;
+    border-radius: 28px !important;
+}}
+.module-title {{ color: #102033 !important; }}
+
+.copilot-card {{
+    background: linear-gradient(180deg, rgba(248,252,255,0.94) 0%, rgba(240,253,250,0.84) 100%) !important;
+    border: 1px solid rgba(37,99,235,0.14) !important;
+    box-shadow: 0 16px 42px rgba(15,76,129,0.08) !important;
+}}
+.copilot-title {{ color: #122033 !important; }}
+.copilot-chip {{
+    background: rgba(14,165,233,0.10) !important;
+    border-color: rgba(14,165,233,0.20) !important;
+    color: #0369a1 !important;
+}}
+
+.stTabs [data-baseweb="tab-list"] {{ background: rgba(255,255,255,0.58); border-radius: 18px; padding: 8px; }}
+button[data-baseweb="tab"] {{
+    border-radius: 14px !important;
+    background: rgba(255,255,255,0.74) !important;
+}}
+button[data-baseweb="tab"][aria-selected="true"] {{
+    color: #0369a1 !important;
+    background: rgba(224,242,254,0.95) !important;
+    border-bottom-color: #14b8a6 !important;
+}}
+
+
+/* =========================
+   Sidebar + chat control harmonization layer
+   Make the side panel and Copilot panel controls match the biomedical blue-green UI.
+   ========================= */
+section[data-testid="stSidebar"] .stTextInput input,
+section[data-testid="stSidebar"] .stTextArea textarea,
+section[data-testid="stSidebar"] .stNumberInput input {{
+    background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(239,249,255,0.88) 100%) !important;
+    border: 1px solid rgba(14,165,233,0.20) !important;
+    color: #102033 !important;
+    border-radius: 16px !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.88), 0 6px 16px rgba(14,165,233,0.055) !important;
+}}
+
+section[data-testid="stSidebar"] .stTextInput input:focus,
+section[data-testid="stSidebar"] .stTextArea textarea:focus,
+section[data-testid="stSidebar"] .stNumberInput input:focus {{
+    border-color: rgba(14,165,233,0.58) !important;
+    box-shadow: 0 0 0 3px rgba(14,165,233,0.12), inset 0 1px 0 rgba(255,255,255,0.9) !important;
+}}
+
+section[data-testid="stSidebar"] [data-baseweb="select"] > div {{
+    background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(239,249,255,0.88) 100%) !important;
+    border: 1px solid rgba(14,165,233,0.20) !important;
+    border-radius: 16px !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.88), 0 6px 16px rgba(14,165,233,0.055) !important;
+}}
+
+section[data-testid="stSidebar"] .stButton > button {{
+    background: linear-gradient(135deg, rgba(14,165,233,0.12) 0%, rgba(20,184,166,0.14) 100%) !important;
+    border: 1px solid rgba(14,165,233,0.24) !important;
+    color: #075985 !important;
+    border-radius: 999px !important;
+    box-shadow: 0 8px 18px rgba(14,165,233,0.09), inset 0 1px 0 rgba(255,255,255,0.72) !important;
+}}
+
+section[data-testid="stSidebar"] .stButton > button:hover {{
+    background: linear-gradient(135deg, rgba(14,165,233,0.20) 0%, rgba(20,184,166,0.22) 100%) !important;
+    color: #064e73 !important;
+    border-color: rgba(14,165,233,0.42) !important;
+    transform: translateY(-1px);
+}}
+
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{
+    background: linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(236,253,245,0.64) 100%) !important;
+    border: 1px dashed rgba(20,184,166,0.34) !important;
+    border-radius: 18px !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.74) !important;
+}}
+
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button {{
+    background: rgba(255,255,255,0.88) !important;
+    border: 1px solid rgba(14,165,233,0.24) !important;
+    color: #075985 !important;
+    border-radius: 14px !important;
+}}
+
+section[data-testid="stSidebar"] [role="radiogroup"] label {{
+    background: rgba(255,255,255,0.52);
+    border: 1px solid rgba(14,165,233,0.12);
+    border-radius: 999px;
+    padding: 6px 10px;
+    margin-right: 4px;
+}}
+
+section[data-testid="stSidebar"] [role="radiogroup"] label:hover {{
+    background: rgba(224,242,254,0.72);
+    border-color: rgba(14,165,233,0.28);
+}}
+
+.copilot-card .stButton > button {{
+    background: linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(236,253,245,0.72) 100%) !important;
+    border: 1px solid rgba(14,165,233,0.20) !important;
+    color: #0f3757 !important;
+    border-radius: 18px !important;
+    box-shadow: 0 8px 18px rgba(14,165,233,0.08), inset 0 1px 0 rgba(255,255,255,0.82) !important;
+}}
+
+.copilot-card .stButton > button:hover {{
+    background: linear-gradient(135deg, rgba(224,242,254,0.90) 0%, rgba(204,251,241,0.86) 100%) !important;
+    border-color: rgba(14,165,233,0.42) !important;
+    color: #0369a1 !important;
+    transform: translateY(-1px);
+}}
+
+.copilot-shell .stTextArea textarea {{
+    background: linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(248,252,255,0.82) 100%) !important;
+    border: 1px solid rgba(14,165,233,0.22) !important;
+    color: #102033 !important;
+    border-radius: 24px !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.88), 0 10px 24px rgba(15,76,129,0.06) !important;
+}}
+
+.copilot-shell .stTextArea textarea:focus {{
+    border-color: rgba(14,165,233,0.58) !important;
+    box-shadow: 0 0 0 3px rgba(14,165,233,0.13), inset 0 1px 0 rgba(255,255,255,0.92) !important;
+}}
+
+.copilot-shell [data-testid="stForm"] {{
+    background: rgba(255,255,255,0.38) !important;
+    border: 1px solid rgba(14,165,233,0.13) !important;
+    border-radius: 26px !important;
+    padding: 10px 10px 12px 10px !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.62) !important;
+}}
+
+.copilot-shell [data-testid="stFormSubmitButton"] button {{
+    background: linear-gradient(135deg, #0ea5e9 0%, #14b8a6 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 999px !important;
+    box-shadow: 0 10px 22px rgba(14,165,233,0.24) !important;
+}}
+
+.copilot-shell [data-testid="stFormSubmitButton"] button:hover {{
+    filter: brightness(1.03);
+    transform: translateY(-1px);
+}}
+
+
+/* =========================
+   Button + ChatGPT-like composer refinement
+   ========================= */
+.stButton > button,
+.stDownloadButton > button,
+[data-testid="stFormSubmitButton"] button {{
+    background: linear-gradient(135deg, rgba(224,242,254,0.96) 0%, rgba(204,251,241,0.92) 100%) !important;
+    border: 1px solid rgba(14,165,233,0.32) !important;
+    color: #0f3757 !important;
+    border-radius: 999px !important;
+    box-shadow: 0 8px 20px rgba(14,165,233,0.11), inset 0 1px 0 rgba(255,255,255,0.82) !important;
+    transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, filter .16s ease;
+}}
+.stButton > button:hover,
+.stDownloadButton > button:hover,
+[data-testid="stFormSubmitButton"] button:hover {{
+    transform: translateY(-1px);
+    filter: brightness(1.02);
+    border-color: rgba(20,184,166,0.58) !important;
+    color: #0369a1 !important;
+    box-shadow: 0 12px 28px rgba(14,165,233,0.18) !important;
+}}
+
+.nav-panel [data-testid="stBaseButton-primary"] {{
+    background: linear-gradient(135deg, #0ea5e9 0%, #14b8a6 100%) !important;
+    color: #ffffff !important;
+    border: none !important;
+    box-shadow: 0 10px 26px rgba(14,165,233,0.26) !important;
+}}
+.nav-panel [data-testid="stBaseButton-primary"] p,
+.nav-panel [data-testid="stBaseButton-primary"] span {{
+    color: #ffffff !important;
+}}
+.nav-panel [data-testid="stBaseButton-secondary"] {{
+    background: linear-gradient(180deg, rgba(255,255,255,0.90) 0%, rgba(239,249,255,0.88) 100%) !important;
+    border-color: rgba(14,165,233,0.22) !important;
+}}
+
+.copilot-card [data-testid="stBaseButton-secondary"] {{
+    background: linear-gradient(135deg, rgba(224,242,254,0.96) 0%, rgba(204,251,241,0.88) 100%) !important;
+    color: #0f3757 !important;
+    border: 1px solid rgba(14,165,233,0.28) !important;
+    border-radius: 999px !important;
+    min-height: 42px !important;
+}}
+.copilot-card [data-testid="stBaseButton-secondary"]:hover {{
+    background: linear-gradient(135deg, rgba(186,230,253,0.98) 0%, rgba(153,246,228,0.90) 100%) !important;
+    color: #0369a1 !important;
+}}
+
+.chat-composer-caption {{
+    font-size: 12px;
+    color: #587187;
+    margin: 0 0 6px 4px;
+}}
+.copilot-shell [data-testid="stForm"] {{
+    background: linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(248,252,255,0.72) 100%) !important;
+    border: 1px solid rgba(14,165,233,0.20) !important;
+    border-radius: 30px !important;
+    padding: 10px 12px 12px 12px !important;
+    box-shadow: 0 14px 32px rgba(15,76,129,0.08), inset 0 1px 0 rgba(255,255,255,0.76) !important;
+}}
+.copilot-shell .stTextArea textarea {{
+    background: rgba(255,255,255,0.54) !important;
+    border: none !important;
+    color: #102033 !important;
+    border-radius: 24px !important;
+    box-shadow: none !important;
+    min-height: 68px !important;
+    padding: 14px 16px !important;
+    font-size: 14px !important;
+}}
+.copilot-shell .stTextArea textarea:focus {{
+    border: none !important;
+    box-shadow: inset 0 0 0 1px rgba(14,165,233,0.22) !important;
+}}
+.copilot-shell [data-testid="stFormSubmitButton"] button {{
+    width: 52px !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    border-radius: 999px !important;
+    padding: 0 !important;
+    margin-top: 20px !important;
+    background: linear-gradient(135deg, #0ea5e9 0%, #14b8a6 100%) !important;
+    color: white !important;
+    font-size: 24px !important;
+    font-weight: 900 !important;
+    border: none !important;
+    box-shadow: 0 14px 28px rgba(14,165,233,0.28) !important;
+}}
+.copilot-shell [data-testid="stFormSubmitButton"] button p {{
+    color: white !important;
+    font-size: 24px !important;
+    line-height: 1 !important;
+}}
+.chat-clear-row [data-testid="stBaseButton-secondary"] {{
+    background: rgba(255,255,255,0.56) !important;
+    border: 1px solid rgba(14,165,233,0.14) !important;
+    color: #557084 !important;
+    min-height: 34px !important;
+    box-shadow: none !important;
+}}
+
+{dark_override}
+
+/* Dark theme fallback: keep controls readable when the user toggles dark mode. */
+[data-theme="dark"] section[data-testid="stSidebar"] .stTextInput input,
+[data-theme="dark"] section[data-testid="stSidebar"] .stTextArea textarea,
+[data-theme="dark"] .copilot-shell .stTextArea textarea {{
+    background: rgba(15,23,42,0.92) !important;
+    color: #e5e7eb !important;
+    border-color: rgba(96,165,250,0.30) !important;
+}}
+
+
 </style>
 """,
         unsafe_allow_html=True,
@@ -457,7 +1265,12 @@ def style_plotly(fig):
         title=dict(font=dict(color=cfg["text"], size=18)),
         legend=dict(bgcolor="rgba(0,0,0,0)", borderwidth=0, font=dict(color=cfg["text"])),
         margin=dict(l=22, r=18, t=56, b=28),
-        hoverlabel=dict(font=dict(color=cfg["text"])),
+        colorway=["#22D3EE", "#38BDF8", "#2DD4BF", "#6366F1", "#14B8A6", "#60A5FA"] if st.session_state.theme_mode == "深色" else None,
+        hoverlabel=dict(
+            bgcolor=cfg["card_alt"],
+            bordercolor=cfg["line"],
+            font=dict(color=cfg["text"]),
+        ),
     )
     fig.update_xaxes(
         gridcolor=cfg["grid"],
@@ -474,6 +1287,269 @@ def style_plotly(fig):
         title_font=dict(color=cfg["text"]),
     )
     return fig
+
+
+# =========================
+# 归一化分布图：同类字段合并统计
+# =========================
+def _compact_col_name(col: Any) -> str:
+    """用于宽松匹配 Excel 字段名。"""
+    s = "" if col is None else str(col)
+    s = s.replace("\ufeff", "").replace("\u3000", " ").strip()
+    s = s.replace("（", "(").replace("）", ")")
+    s = re.sub(r"[\r\n\t\s]+", "_", s)
+    s = re.sub(r"_+", "_", s).strip("_")
+    return s
+
+
+def _col_match_key(col: Any) -> str:
+    """去掉常见分隔符后的小写列名，用于匹配 EE_1_Percent / EE Percent 等变体。"""
+    return re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff]+", "", _compact_col_name(col)).lower()
+
+
+def _find_group_columns(df: pd.DataFrame, group_name: str) -> List[str]:
+    """
+    根据“指标类别”寻找对应 Excel 列。注意：这里不是按原始列逐列画，
+    而是把本质相同的列合并，例如 EE_1_Percent + EE_2_Percent -> EE_Percent。
+    """
+    matched: List[str] = []
+
+    for col in df.columns:
+        raw = _compact_col_name(col)
+        raw_lower = raw.lower()
+        key = _col_match_key(col)
+
+        if group_name == "Size_Mean_nm":
+            ok = key in {"sizemeannm", "sizemean", "size", "平均粒径nm", "粒径nm", "粒径"}
+        elif group_name == "PDI":
+            ok = key == "pdi"
+        elif group_name == "Zeta_mV":
+            ok = key in {"zetamv", "zeta", "zetapotential", "zeta电位"}
+        elif group_name == "EE_Percent":
+            # 支持 EE_Percent、EE_1_Percent、EE_2_Percent；也兼容表头被写成 E_1_Percent 的情况。
+            ok = (
+                key in {"eepercent", "ee", "包封率", "包封率百分比"}
+                or re.fullmatch(r"ee\d+percent", key) is not None
+                or re.fullmatch(r"e\d+percent", key) is not None
+                or raw_lower.startswith("ee_percent_")
+            )
+        elif group_name == "DL_Percent":
+            # 支持 DL_Percent、DL_1_Percent、DL_2_Percent；也兼容表头被写成 L_1_Percent 的情况。
+            ok = (
+                key in {"dlpercent", "dl", "载药量", "载药量百分比"}
+                or re.fullmatch(r"dl\d+percent", key) is not None
+                or re.fullmatch(r"l\d+percent", key) is not None
+                or raw_lower.startswith("dl_percent_")
+            )
+        elif group_name == "flux":
+            ok = raw_lower.startswith("flux") or key.startswith("flux")
+        else:
+            ok = False
+
+        if ok:
+            matched.append(col)
+
+    # 去重并保持顺序
+    seen = set()
+    out = []
+    for col in matched:
+        if col not in seen:
+            out.append(col)
+            seen.add(col)
+    return out
+
+
+def _to_numeric_series(series: pd.Series) -> pd.Series:
+    """把 Excel 中可能带 %、单位、破折号的文本数值转成数值序列。"""
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.to_numeric(series, errors="coerce").dropna()
+
+    s = (
+        series.astype(str)
+        .str.strip()
+        .str.replace("−", "-", regex=False)
+        .str.replace("–", "-", regex=False)
+        .str.replace("—", "-", regex=False)
+        .str.replace("%", "", regex=False)
+    )
+    s = s.str.extract(r"([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)", expand=False)
+    return pd.to_numeric(s, errors="coerce").dropna()
+
+
+def build_grouped_normalized_distribution(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    构建用于小提琴图的长表。
+
+    合并口径：
+    - Size_Mean_nm 单独统计
+    - PDI 单独统计
+    - Zeta_mV 单独统计
+    - EE_Percent / EE_1_Percent / EE_2_Percent 合并为 EE_Percent
+    - DL_Percent / DL_1_Percent / DL_2_Percent 合并为 DL_Percent
+    - 所有 flux 开头字段合并为 flux
+
+    关键点：先按类别合并原始值，再对该类别整体做 0-1 归一化。
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    parameter_order = ["Size_Mean_nm", "PDI", "Zeta_mV", "EE_Percent", "DL_Percent", "flux"]
+    rows: List[Dict[str, Any]] = []
+
+    for parameter in parameter_order:
+        cols = _find_group_columns(df, parameter)
+        if not cols:
+            continue
+
+        values_list = []
+        source_col_counts = []
+        for col in cols:
+            s = _to_numeric_series(df[col])
+            if not s.empty:
+                values_list.append(s.reset_index(drop=True))
+                source_col_counts.append(f"{col}({len(s)})")
+
+        if not values_list:
+            continue
+
+        values = pd.concat(values_list, ignore_index=True).dropna()
+        if values.empty:
+            continue
+
+        v_min = float(values.min())
+        v_max = float(values.max())
+        if v_max > v_min:
+            norm_values = (values - v_min) / (v_max - v_min)
+        else:
+            norm_values = values * 0 + 0.5
+
+        for raw_value, norm_value in zip(values, norm_values):
+            rows.append(
+                {
+                    "Parameter": parameter,
+                    "Normalized": float(norm_value),
+                    "Raw_Value": float(raw_value),
+                    "Original_Min": v_min,
+                    "Original_Max": v_max,
+                    "Source_Columns": ", ".join([str(c) for c in cols]),
+                    "Source_Counts": "; ".join(source_col_counts),
+                    "N": int(len(values)),
+                }
+            )
+
+    return pd.DataFrame(rows)
+
+
+def render_grouped_normalized_distribution(df: Optional[pd.DataFrame]) -> None:
+    """渲染“同类字段合并统计”的归一化分布小提琴图。"""
+    if df is None or df.empty:
+        st.info("当前没有可用于绘制归一化分布图的数据。")
+        return
+
+    plot_df = build_grouped_normalized_distribution(df)
+    if plot_df.empty:
+        st.info(
+            "未找到可用于归一化分布图的有效字段。请检查是否存在 Size_Mean_nm、PDI、Zeta_mV、"
+            "EE_1_Percent/EE_2_Percent、DL_1_Percent/DL_2_Percent、flux(...) 等列。"
+        )
+        with st.expander("查看当前已识别字段", expanded=False):
+            st.write(list(df.columns))
+        return
+
+    parameter_order = ["Size_Mean_nm", "PDI", "Zeta_mV", "EE_Percent", "DL_Percent", "flux"]
+    parameter_order = [p for p in parameter_order if p in set(plot_df["Parameter"])]
+
+    color_map = {
+        "Size_Mean_nm": "#4C78A8",
+        "PDI": "#F58518",
+        "Zeta_mV": "#54A24B",
+        "EE_Percent": "#E45756",
+        "DL_Percent": "#B279A2",
+        "flux": "#72B7B2",
+    }
+
+    fig = go.Figure()
+    for parameter in parameter_order:
+        sub = plot_df[plot_df["Parameter"] == parameter]
+        fig.add_trace(
+            go.Violin(
+                x=sub["Normalized"],
+                y=[parameter] * len(sub),
+                orientation="h",
+                name=parameter,
+                box_visible=True,
+                meanline_visible=True,
+                points="all",
+                jitter=0.32,
+                pointpos=0,
+                scalemode="width",
+                line=dict(color="rgba(45,45,45,0.85)", width=1.3),
+                fillcolor=color_map.get(parameter, "#4C78A8"),
+                marker=dict(
+                    size=5,
+                    opacity=0.68,
+                    color=color_map.get(parameter, "#4C78A8"),
+                    line=dict(width=0.35, color="rgba(30,30,30,0.75)"),
+                ),
+                customdata=sub[["Raw_Value", "Original_Min", "Original_Max", "N", "Source_Columns"]],
+                hovertemplate=(
+                    "<b>%{y}</b><br>"
+                    "Normalized=%{x:.3f}<br>"
+                    "Raw value=%{customdata[0]:.4g}<br>"
+                    "Raw range=%{customdata[1]:.4g} - %{customdata[2]:.4g}<br>"
+                    "N=%{customdata[3]}<br>"
+                    "Source=%{customdata[4]}"
+                    "<extra></extra>"
+                ),
+            )
+        )
+
+    cfg = get_theme_cfg()
+    fig.update_layout(
+        title="同类指标合并后的归一化分布图",
+        xaxis_title="Normalized value",
+        yaxis_title="",
+        showlegend=False,
+        height=max(460, 78 * len(parameter_order) + 170),
+        paper_bgcolor=cfg["card"],
+        plot_bgcolor=cfg["card"],
+        font=dict(color=cfg["text"], size=14),
+        title_font=dict(size=20, color=cfg["text"]),
+        margin=dict(l=135, r=35, t=72, b=55),
+    )
+    fig.update_xaxes(
+        range=[-0.05, 1.05],
+        gridcolor=cfg["grid"],
+        linecolor=cfg["line"],
+        zeroline=False,
+        tickfont=dict(color=cfg["text"]),
+        title_font=dict(color=cfg["text"]),
+    )
+    fig.update_yaxes(
+        categoryorder="array",
+        categoryarray=parameter_order[::-1],
+        gridcolor=cfg["grid"],
+        linecolor=cfg["line"],
+        tickfont=dict(color=cfg["text"], size=14),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    summary_df = (
+        plot_df.groupby("Parameter")
+        .agg(
+            样本数=("Normalized", "count"),
+            原始最小值=("Original_Min", "first"),
+            原始最大值=("Original_Max", "first"),
+            来源列=("Source_Columns", "first"),
+            各列有效数=("Source_Counts", "first"),
+        )
+        .reset_index()
+    )
+
+    st.caption("统计口径：同类字段先合并原始值，再按合并后的每一类指标分别做 0–1 归一化。")
+    with st.expander("查看归一化统计口径与来源列", expanded=False):
+        safe_dataframe(summary_df, use_container_width=True)
 
 
 # =========================
@@ -741,6 +1817,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
             "temp_",
             "time_",
             "num_",
+            "flux",
         )
         if lc.startswith(numeric_prefixes):
             return True
@@ -1748,7 +2825,7 @@ def render_overview_tab(df_main: Optional[pd.DataFrame]) -> None:
         if not plot_df.empty:
             color_col = "apo_type" if "apo_type" in plot_df.columns else None
             fig = px.scatter(
-                plot_df.head(500),
+                plot_df,
                 x="Size_Mean_nm",
                 y="PDI",
                 color=color_col,
@@ -1756,6 +2833,9 @@ def render_overview_tab(df_main: Optional[pd.DataFrame]) -> None:
                 title="粒径 - PDI 散点图",
             )
             st.plotly_chart(style_plotly(fig), use_container_width=True)
+
+    st.markdown("#### 同类指标合并后的归一化分布")
+    render_grouped_normalized_distribution(df_main)
 
 
 def render_datawork_tab(df_main: Optional[pd.DataFrame]) -> None:
@@ -1998,6 +3078,691 @@ def render_experiment_tab() -> None:
                 render_tool_result("reverse_design", result)
 
 
+
+
+# =========================
+# CatBoost + Optuna 真实机器学习训练与反向推荐
+# =========================
+def _column_name_lc(col: Any) -> str:
+    return _normalize_column_name(col).lower()
+
+
+def _is_ml_output_column(col: str) -> bool:
+    """识别产品结果/评价指标列，训练 X 时排除这些列，避免数据泄漏。"""
+    lc = _column_name_lc(col)
+    if lc in {"size_mean_nm", "pdi", "zeta_mv", "shape_observed"}:
+        return True
+    if lc.startswith("ee") and ("percent" in lc or lc.endswith("_pct") or lc.endswith("_1") or lc.endswith("_2")):
+        return True
+    if lc.startswith("dl") and ("percent" in lc or lc.endswith("_pct") or lc.endswith("_1") or lc.endswith("_2")):
+        return True
+    if lc.startswith("flux"):
+        return True
+    if "efflux" in lc:
+        return True
+    return False
+
+
+def _find_exact_or_pattern_columns(df: pd.DataFrame, patterns: List[str]) -> List[str]:
+    matched: List[str] = []
+    for col in df.columns:
+        clean = _column_name_lc(col)
+        for pat in patterns:
+            if re.match(pat, clean, flags=re.IGNORECASE):
+                matched.append(col)
+                break
+    return matched
+
+
+def _combine_numeric_target(df: pd.DataFrame, columns: List[str]) -> pd.Series:
+    """将同一类输出指标按行合并；同一行多个值时取非空均值。"""
+    if not columns:
+        return pd.Series([float("nan")] * len(df), index=df.index)
+    parts = []
+    for col in columns:
+        parts.append(pd.to_numeric(df[col], errors="coerce"))
+    target_mat = pd.concat(parts, axis=1)
+    return target_mat.mean(axis=1, skipna=True)
+
+
+def build_ml_modeling_frame(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, pd.Series], Dict[str, List[str]], List[str]]:
+    """
+    整理机器学习数据。
+    X：配方组成 + 工艺参数。
+    y：产品结果/评价指标，EE/DL/flux 会按同类字段合并。
+    """
+    work = clean_dataframe(df)
+
+    target_sources = {
+        "Size_Mean_nm": _find_exact_or_pattern_columns(work, [r"^size_mean_nm$", r"^size_nm$", r"^size$"]),
+        "PDI": _find_exact_or_pattern_columns(work, [r"^pdi$"]),
+        "Zeta_mV": _find_exact_or_pattern_columns(work, [r"^zeta_mv$", r"^zeta$", r"^zetapotential$"]),
+        "EE_Percent": _find_exact_or_pattern_columns(work, [r"^ee_percent$", r"^ee_?\d+_percent$", r"^ee\d+_percent$", r"^ee_?\d+$"]),
+        "DL_Percent": _find_exact_or_pattern_columns(work, [r"^dl_percent$", r"^dl_?\d+_percent$", r"^dl\d+_percent$", r"^dl_?\d+$"]),
+        "flux": _find_exact_or_pattern_columns(work, [r"^flux.*", r".*efflux.*"]),
+    }
+
+    y_map: Dict[str, pd.Series] = {}
+    for target_name, cols in target_sources.items():
+        y_map[target_name] = _combine_numeric_target(work, cols)
+
+    excluded_names = {"ref_id", "formulation_name", "record_id", "source", "title", "doi", "journal", "year"}
+    feature_cols: List[str] = []
+    for col in work.columns:
+        lc = _column_name_lc(col)
+        if lc in excluded_names:
+            continue
+        if _is_ml_output_column(col):
+            continue
+        feature_cols.append(col)
+
+    X = work[feature_cols].copy()
+    for col in X.columns:
+        if X[col].dtype == "object":
+            X[col] = X[col].where(pd.notnull(X[col]), "none")
+            X[col] = X[col].astype(str).str.strip().replace({"": "none", "nan": "none", "None": "none", "null": "none"})
+
+    return X, y_map, target_sources, feature_cols
+
+
+def _infer_feature_types_for_catboost(X: pd.DataFrame) -> Tuple[pd.DataFrame, List[str], List[str]]:
+    """推断 CatBoost 的数值列与类别列，并返回可直接训练的数据表。"""
+    work = X.copy()
+    numeric_cols: List[str] = []
+    categorical_cols: List[str] = []
+
+    for col in work.columns:
+        converted = pd.to_numeric(work[col], errors="coerce")
+        valid_ratio = float(converted.notna().mean()) if len(converted) else 0.0
+
+        if pd.api.types.is_numeric_dtype(work[col]) or valid_ratio >= 0.78:
+            numeric_cols.append(col)
+            work[col] = converted.fillna(0.0).astype(float)
+        else:
+            categorical_cols.append(col)
+            work[col] = (
+                work[col]
+                .where(pd.notnull(work[col]), "none")
+                .astype(str)
+                .str.strip()
+                .replace({"": "none", "nan": "none", "None": "none", "null": "none"})
+            )
+
+    return work, numeric_cols, categorical_cols
+
+
+def _fit_catboost_regressor(X_train: pd.DataFrame, y_train: pd.Series, cat_cols: List[str], X_valid=None, y_valid=None) -> Any:
+    if not CATBOOST_AVAILABLE:
+        raise RuntimeError("当前环境未安装 catboost。请在 requirements.txt 中加入 catboost。")
+
+    model = CatBoostRegressor(
+        iterations=650,
+        learning_rate=0.035,
+        depth=6,
+        l2_leaf_reg=6.0,
+        loss_function="RMSE",
+        random_seed=42,
+        verbose=False,
+        allow_writing_files=False,
+        nan_mode="Min",
+    )
+    train_pool = Pool(X_train, y_train, cat_features=cat_cols)
+    if X_valid is not None and y_valid is not None and len(X_valid) >= 3:
+        valid_pool = Pool(X_valid, y_valid, cat_features=cat_cols)
+        model.fit(train_pool, eval_set=valid_pool, use_best_model=True, early_stopping_rounds=60)
+    else:
+        model.fit(train_pool)
+    return model
+
+
+def _catboost_predict(bundle: Dict[str, Any], X_candidate: pd.DataFrame) -> Dict[str, float]:
+    """对单行候选或小批量候选进行预测；返回第一行预测。"""
+    pred_df = prepare_candidates_for_catboost(bundle, X_candidate)
+    preds: Dict[str, float] = {}
+    for target_name, model in bundle.get("models", {}).items():
+        try:
+            p = model.predict(pred_df)
+            preds[target_name] = float(p[0])
+        except Exception:
+            continue
+    return preds
+
+
+def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
+    """训练 CatBoost 正向预测模型，并生成评估指标与特征重要性。"""
+    if not SKLEARN_AVAILABLE:
+        raise RuntimeError("当前环境未安装 scikit-learn。请在 requirements.txt 中加入 scikit-learn。")
+    if not CATBOOST_AVAILABLE:
+        raise RuntimeError("当前环境未安装 catboost。请在 requirements.txt 中加入 catboost 后重新部署。")
+
+    X_raw, y_map, target_sources, feature_cols = build_ml_modeling_frame(df)
+    X_model, numeric_cols, categorical_cols = _infer_feature_types_for_catboost(X_raw)
+
+    if not feature_cols:
+        raise RuntimeError("没有识别到可用于训练的配方/工艺输入特征。")
+
+    models: Dict[str, Any] = {}
+    summary_rows: List[Dict[str, Any]] = []
+    target_ranges: Dict[str, Tuple[float, float]] = {}
+    feature_importance: Dict[str, pd.DataFrame] = {}
+
+    for target_name, y in y_map.items():
+        y = pd.to_numeric(y, errors="coerce")
+        mask = y.notna()
+        n = int(mask.sum())
+        source_cols = target_sources.get(target_name, [])
+
+        if n < 12:
+            summary_rows.append({
+                "目标": target_name,
+                "训练样本数": n,
+                "状态": "样本不足，暂不训练",
+                "MAE": None,
+                "R2": None,
+                "来源列": ", ".join(source_cols),
+            })
+            continue
+
+        X_sub = X_model.loc[mask].copy()
+        y_sub = y.loc[mask].astype(float)
+
+        mae = None
+        r2 = None
+        try:
+            if n >= 30:
+                X_train, X_test, y_train, y_test = train_test_split(X_sub, y_sub, test_size=0.22, random_state=42)
+                model_eval = _fit_catboost_regressor(X_train, y_train, categorical_cols, X_test, y_test)
+                pred = model_eval.predict(X_test)
+                mae = float(mean_absolute_error(y_test, pred))
+                r2 = float(r2_score(y_test, pred)) if len(y_test) >= 2 else None
+
+            # 最终用所有非空目标样本重训，用于优化推荐。
+            model_final = _fit_catboost_regressor(X_sub, y_sub, categorical_cols)
+            models[target_name] = model_final
+            target_ranges[target_name] = (float(y_sub.min()), float(y_sub.max()))
+
+            try:
+                pool_all = Pool(X_sub, y_sub, cat_features=categorical_cols)
+                fi = model_final.get_feature_importance(pool_all)
+                fi_df = pd.DataFrame({"特征": X_sub.columns.tolist(), "重要性": fi}).sort_values("重要性", ascending=False).head(30)
+                feature_importance[target_name] = fi_df
+            except Exception:
+                pass
+
+            summary_rows.append({
+                "目标": target_name,
+                "训练样本数": n,
+                "状态": "已训练-CatBoost",
+                "MAE": None if mae is None else round(mae, 4),
+                "R2": None if r2 is None else round(r2, 4),
+                "来源列": ", ".join(source_cols),
+            })
+        except Exception as e:
+            summary_rows.append({
+                "目标": target_name,
+                "训练样本数": n,
+                "状态": f"训练失败：{e}",
+                "MAE": None,
+                "R2": None,
+                "来源列": ", ".join(source_cols),
+            })
+
+    if not models:
+        raise RuntimeError("没有任何 CatBoost 目标模型完成训练。请检查 Size_Mean_nm、PDI、EE/DL/flux 等目标列是否有足够非空数据。")
+
+    X_candidate_base = X_model.copy()
+    num_ranges: Dict[str, Tuple[float, float]] = {}
+    cat_values: Dict[str, List[str]] = {}
+
+    for col in numeric_cols:
+        s = pd.to_numeric(X_candidate_base[col], errors="coerce")
+        if s.notna().any():
+            lo, hi = float(s.min()), float(s.max())
+            if abs(hi - lo) < 1e-12:
+                hi = lo
+            num_ranges[col] = (lo, hi)
+        else:
+            num_ranges[col] = (0.0, 0.0)
+
+    for col in categorical_cols:
+        vals = clean_categorical_series(X_candidate_base[col]).astype(str).unique().tolist()
+        vals = [v for v in vals if str(v).strip()]
+        # 避免类别空间太大导致 Optuna 太慢；保留出现频次最高的前 35 类。
+        if len(vals) > 35:
+            vals = X_candidate_base[col].astype(str).value_counts().head(35).index.tolist()
+        cat_values[col] = vals if vals else ["none"]
+
+    return {
+        "algorithm": "CatBoostRegressor + Optuna",
+        "models": models,
+        "summary": pd.DataFrame(summary_rows),
+        "feature_importance": feature_importance,
+        "feature_cols": feature_cols,
+        "numeric_cols": numeric_cols,
+        "categorical_cols": categorical_cols,
+        "target_sources": target_sources,
+        "target_ranges": target_ranges,
+        "X_base": X_candidate_base,
+        "num_ranges": num_ranges,
+        "cat_values": cat_values,
+    }
+
+
+def prepare_candidates_for_catboost(bundle: Dict[str, Any], candidates: pd.DataFrame) -> pd.DataFrame:
+    """确保候选处方的列顺序、类型与 CatBoost 训练阶段一致。"""
+    feature_cols: List[str] = bundle["feature_cols"]
+    numeric_cols: List[str] = bundle["numeric_cols"]
+    categorical_cols: List[str] = bundle["categorical_cols"]
+
+    X = candidates.copy()
+    for col in feature_cols:
+        if col not in X.columns:
+            X[col] = 0.0 if col in numeric_cols else "none"
+    X = X[feature_cols].copy()
+
+    for col in numeric_cols:
+        X[col] = pd.to_numeric(X[col], errors="coerce").fillna(0.0).astype(float)
+    for col in categorical_cols:
+        X[col] = X[col].where(pd.notnull(X[col]), "none").astype(str).replace({"": "none", "nan": "none", "None": "none"})
+    return X
+
+
+def _suggest_candidate_from_trial(trial: Any, bundle: Dict[str, Any]) -> pd.DataFrame:
+    """由 Optuna trial 生成单个候选处方。"""
+    row: Dict[str, Any] = {}
+    feature_cols: List[str] = bundle["feature_cols"]
+    numeric_cols: List[str] = bundle["numeric_cols"]
+    categorical_cols: List[str] = bundle["categorical_cols"]
+    num_ranges: Dict[str, Tuple[float, float]] = bundle["num_ranges"]
+    cat_values: Dict[str, List[str]] = bundle["cat_values"]
+
+    for col in feature_cols:
+        safe_name = re.sub(r"[^A-Za-z0-9_]+", "_", str(col))[:80]
+        if col in numeric_cols:
+            lo, hi = num_ranges.get(col, (0.0, 0.0))
+            if not pd.notna(lo):
+                lo = 0.0
+            if not pd.notna(hi):
+                hi = lo
+            if hi <= lo:
+                row[col] = float(lo)
+            else:
+                step = None
+                if any(token in _column_name_lc(col) for token in ["ratio", "temp", "time", "ph", "size", "cycle"]):
+                    lo = max(0.0, float(lo))
+                row[col] = float(trial.suggest_float(f"num_{safe_name}", float(lo), float(hi)))
+        elif col in categorical_cols:
+            vals = cat_values.get(col, ["none"])
+            vals = [str(v) for v in vals if str(v).strip()]
+            if not vals:
+                vals = ["none"]
+            if len(vals) == 1:
+                row[col] = vals[0]
+            else:
+                row[col] = trial.suggest_categorical(f"cat_{safe_name}", vals)
+        else:
+            row[col] = "none"
+    return pd.DataFrame([row])
+
+
+def _score_predictions(
+    preds: Dict[str, float],
+    target_size_max: Optional[float] = 100.0,
+    target_pdi_max: Optional[float] = 0.25,
+    target_ee_min: Optional[float] = 80.0,
+    target_dl_min: Optional[float] = None,
+    target_flux_min: Optional[float] = None,
+) -> float:
+    """综合评分：越高越好，用于贝叶斯优化排序。"""
+    score = 0.0
+
+    if target_size_max is not None and "Size_Mean_nm" in preds:
+        v = preds["Size_Mean_nm"]
+        if pd.notna(v):
+            score += max(0.0, (target_size_max - v) / max(target_size_max, 1e-6)) * 35.0
+            score -= max(0.0, (v - target_size_max) / max(target_size_max, 1e-6)) * 130.0
+
+    if target_pdi_max is not None and "PDI" in preds:
+        v = preds["PDI"]
+        if pd.notna(v):
+            score += max(0.0, (target_pdi_max - v) / max(target_pdi_max, 1e-6)) * 35.0
+            score -= max(0.0, (v - target_pdi_max) / max(target_pdi_max, 1e-6)) * 120.0
+
+    if target_ee_min is not None and "EE_Percent" in preds:
+        v = preds["EE_Percent"]
+        if pd.notna(v):
+            score += max(0.0, (v - target_ee_min) / max(100.0 - target_ee_min, 1e-6)) * 40.0
+            score -= max(0.0, (target_ee_min - v) / max(target_ee_min, 1e-6)) * 110.0
+
+    if target_dl_min is not None and "DL_Percent" in preds:
+        v = preds["DL_Percent"]
+        if pd.notna(v):
+            score += max(0.0, (v - target_dl_min) / max(target_dl_min, 1e-6)) * 18.0
+            score -= max(0.0, (target_dl_min - v) / max(target_dl_min, 1e-6)) * 50.0
+
+    if target_flux_min is not None and "flux" in preds:
+        v = preds["flux"]
+        if pd.notna(v):
+            score += max(0.0, (v - target_flux_min) / max(target_flux_min, 1e-6)) * 18.0
+            score -= max(0.0, (target_flux_min - v) / max(target_flux_min, 1e-6)) * 50.0
+
+    return float(score)
+
+
+def _format_recommendation_table(df: pd.DataFrame) -> pd.DataFrame:
+    """推荐结果列排序。"""
+    preferred = [
+        "优化模式", "综合评分",
+        "phos_1_type", "phos_1_ratio", "phos_2_type", "phos_2_ratio", "phos_3_type", "phos_3_ratio",
+        "chol_ratio", "neutral_lipid_1_type", "neutral_lipid_1_ratio", "neutral_lipid_2_type", "neutral_lipid_2_ratio",
+        "helper_lipid_1_type", "helper_lipid_1_ratio", "helper_lipid_2_type", "helper_lipid_2_ratio",
+        "apo_type", "apo_ratio", "cargo_1_type", "cargo_1_ratio", "method_lipid_pre", "method_assembly",
+        "buffer_assembly", "buffer_assembly_type", "ph_assembly", "temp_assembly", "time_assembly",
+    ]
+    pred_cols = [c for c in df.columns if c.startswith("预测_")]
+    pareto_cols = [c for c in ["Pareto_目标数", "Pareto_trial"] if c in df.columns]
+    show_cols = [c for c in preferred if c in df.columns] + pred_cols + pareto_cols
+    show_cols = list(dict.fromkeys(show_cols))
+    return df[show_cols]
+
+
+def recommend_with_optuna_bayesian(
+    bundle: Dict[str, Any],
+    target_size_max: Optional[float] = 100.0,
+    target_pdi_max: Optional[float] = 0.25,
+    target_ee_min: Optional[float] = 80.0,
+    target_dl_min: Optional[float] = None,
+    target_flux_min: Optional[float] = None,
+    top_n: int = 8,
+    n_trials: int = 250,
+) -> pd.DataFrame:
+    """Optuna TPE 贝叶斯优化：将多指标压成综合评分，返回 Top N。"""
+    if not OPTUNA_AVAILABLE:
+        raise RuntimeError("当前环境未安装 optuna。请在 requirements.txt 中加入 optuna。")
+    if not bundle.get("models"):
+        raise RuntimeError("模型尚未训练。")
+
+    try:
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+    except Exception:
+        pass
+
+    records: List[Dict[str, Any]] = []
+
+    def objective(trial):
+        cand = _suggest_candidate_from_trial(trial, bundle)
+        preds = _catboost_predict(bundle, cand)
+        score = _score_predictions(
+            preds,
+            target_size_max=target_size_max,
+            target_pdi_max=target_pdi_max,
+            target_ee_min=target_ee_min,
+            target_dl_min=target_dl_min,
+            target_flux_min=target_flux_min,
+        )
+        trial.set_user_attr("candidate", cand.iloc[0].to_dict())
+        trial.set_user_attr("preds", preds)
+        trial.set_user_attr("score", score)
+        return -score
+
+    study = optuna.create_study(
+        direction="minimize",
+        sampler=optuna.samplers.TPESampler(seed=42, multivariate=True, group=True),
+    )
+    study.optimize(objective, n_trials=int(n_trials), n_jobs=1, show_progress_bar=False)
+
+    for trial in study.trials:
+        if trial.value is None:
+            continue
+        cand = trial.user_attrs.get("candidate", {})
+        preds = trial.user_attrs.get("preds", {})
+        score = trial.user_attrs.get("score", -float(trial.value))
+        row = dict(cand)
+        row["优化模式"] = "Bayesian-TPE"
+        row["综合评分"] = round(float(score), 4)
+        for target_name, pred in preds.items():
+            row[f"预测_{target_name}"] = round(float(pred), 4)
+        records.append(row)
+
+    if not records:
+        raise RuntimeError("Optuna 未生成有效推荐结果。")
+
+    out = pd.DataFrame(records)
+    out = out.sort_values("综合评分", ascending=False).drop_duplicates().head(top_n).reset_index(drop=True)
+    return _format_recommendation_table(out)
+
+
+def recommend_with_optuna_pareto(
+    bundle: Dict[str, Any],
+    target_size_max: Optional[float] = 100.0,
+    target_pdi_max: Optional[float] = 0.25,
+    target_ee_min: Optional[float] = 80.0,
+    target_dl_min: Optional[float] = None,
+    target_flux_min: Optional[float] = None,
+    top_n: int = 8,
+    n_trials: int = 250,
+) -> pd.DataFrame:
+    """Optuna 多目标 Pareto 优化。"""
+    if not OPTUNA_AVAILABLE:
+        raise RuntimeError("当前环境未安装 optuna。请在 requirements.txt 中加入 optuna。")
+    models = bundle.get("models", {})
+    if not models:
+        raise RuntimeError("模型尚未训练。")
+
+    objectives: List[Tuple[str, str]] = []
+    if "Size_Mean_nm" in models:
+        objectives.append(("Size_Mean_nm", "minimize"))
+    if "PDI" in models:
+        objectives.append(("PDI", "minimize"))
+    if "EE_Percent" in models:
+        objectives.append(("EE_Percent", "maximize"))
+    if target_dl_min is not None and "DL_Percent" in models:
+        objectives.append(("DL_Percent", "maximize"))
+    if target_flux_min is not None and "flux" in models:
+        objectives.append(("flux", "maximize"))
+
+    if len(objectives) < 2:
+        raise RuntimeError("可用于 Pareto 多目标优化的目标模型少于 2 个。")
+
+    try:
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+    except Exception:
+        pass
+
+    directions = [d for _, d in objectives]
+
+    def objective(trial):
+        cand = _suggest_candidate_from_trial(trial, bundle)
+        preds = _catboost_predict(bundle, cand)
+        score = _score_predictions(
+            preds,
+            target_size_max=target_size_max,
+            target_pdi_max=target_pdi_max,
+            target_ee_min=target_ee_min,
+            target_dl_min=target_dl_min,
+            target_flux_min=target_flux_min,
+        )
+        values = []
+        for target_name, _direction in objectives:
+            val = preds.get(target_name, None)
+            if val is None or not pd.notna(val):
+                # 缺失预测时给极差值，避免进入 Pareto 前沿。
+                val = 1e9 if _direction == "minimize" else -1e9
+            values.append(float(val))
+        trial.set_user_attr("candidate", cand.iloc[0].to_dict())
+        trial.set_user_attr("preds", preds)
+        trial.set_user_attr("score", score)
+        return tuple(values)
+
+    study = optuna.create_study(
+        directions=directions,
+        sampler=optuna.samplers.TPESampler(seed=42, multivariate=True, group=True),
+    )
+    study.optimize(objective, n_trials=int(n_trials), n_jobs=1, show_progress_bar=False)
+
+    records: List[Dict[str, Any]] = []
+    for trial in study.best_trials:
+        cand = trial.user_attrs.get("candidate", {})
+        preds = trial.user_attrs.get("preds", {})
+        score = trial.user_attrs.get("score", 0.0)
+        row = dict(cand)
+        row["优化模式"] = "Pareto-MOO"
+        row["综合评分"] = round(float(score), 4)
+        row["Pareto_目标数"] = len(objectives)
+        row["Pareto_trial"] = trial.number
+        for target_name, pred in preds.items():
+            row[f"预测_{target_name}"] = round(float(pred), 4)
+        records.append(row)
+
+    if not records:
+        raise RuntimeError("Pareto 优化没有得到有效前沿解。")
+
+    out = pd.DataFrame(records)
+    out = out.sort_values("综合评分", ascending=False).drop_duplicates().head(top_n).reset_index(drop=True)
+    return _format_recommendation_table(out)
+
+
+def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
+    st.markdown("---")
+    st.markdown("### CatBoost + Optuna 真实机器学习反向推荐")
+    st.caption("使用 Excel 文献数据库训练 CatBoost 正向模型，再用 Optuna 贝叶斯优化和 Pareto 多目标优化搜索推荐处方。")
+
+    if df_main is None or df_main.empty:
+        st.info("请先在左侧上传或加载 Excel 数据表。")
+        return
+
+    missing_packages = []
+    if not SKLEARN_AVAILABLE:
+        missing_packages.append("scikit-learn")
+    if not CATBOOST_AVAILABLE:
+        missing_packages.append("catboost")
+    if not OPTUNA_AVAILABLE:
+        missing_packages.append("optuna")
+    if missing_packages:
+        st.error("当前环境缺少依赖：" + ", ".join(missing_packages) + "。请更新 requirements.txt 后重新部署。")
+        st.code("streamlit\nopenai>=1.0\npython-dotenv\npandas\nplotly\nopenpyxl\nscikit-learn\njoblib\ncatboost\noptuna", language="text")
+        return
+
+    c_train, c_info = st.columns([1.0, 2.2], gap="large")
+    with c_train:
+        if st.button("训练 CatBoost 模型", use_container_width=True, key="real_ml_train_btn"):
+            try:
+                with st.spinner("正在训练 CatBoost：Size / PDI / Zeta / EE / DL / flux 模型……"):
+                    bundle = train_real_ml_models(df_main)
+                st.session_state.ml_training_bundle = bundle
+                st.session_state.ml_training_summary = bundle["summary"]
+                st.session_state.ml_recommendation_df = None
+                st.session_state.ml_pareto_df = None
+                st.success("CatBoost 模型训练完成。")
+            except Exception as e:
+                st.session_state.ml_training_bundle = None
+                st.session_state.ml_training_summary = None
+                st.error(f"训练失败：{e}")
+
+    with c_info:
+        st.markdown(
+            """
+            **训练模型**：CatBoostRegressor，适合小样本、类别变量多、缺失较多的表格数据。  
+            **反向推荐**：不是直接训练“结果→配方”，而是用 CatBoost 正向模型 + Optuna 搜索候选配方。  
+            **多目标优化**：Pareto 前沿保留不同权衡方案，例如粒径更小、PDI 更低或 EE 更高的候选。
+            """
+        )
+
+    summary = st.session_state.get("ml_training_summary")
+    if isinstance(summary, pd.DataFrame) and not summary.empty:
+        st.markdown("#### 模型评价指标")
+        safe_dataframe(summary, use_container_width=True, height=220)
+
+    bundle = st.session_state.get("ml_training_bundle")
+    if isinstance(bundle, dict) and bundle.get("feature_importance"):
+        with st.expander("查看 CatBoost 特征重要性", expanded=False):
+            targets = list(bundle["feature_importance"].keys())
+            if targets:
+                selected_target = st.selectbox("选择目标模型", targets, key="catboost_feature_importance_target")
+                fi_df = bundle["feature_importance"].get(selected_target)
+                if isinstance(fi_df, pd.DataFrame) and not fi_df.empty:
+                    safe_dataframe(fi_df, use_container_width=True, height=320)
+
+    if not isinstance(bundle, dict):
+        st.info("请先点击“训练 CatBoost 模型”。")
+        return
+
+    st.markdown("#### 优化目标设置")
+    g1, g2, g3, g4, g5 = st.columns(5)
+    with g1:
+        target_size = st.number_input("粒径上限 nm", min_value=1.0, value=100.0, step=5.0, key="real_ml_target_size")
+    with g2:
+        target_pdi = st.number_input("PDI 上限", min_value=0.01, value=0.25, step=0.01, format="%.2f", key="real_ml_target_pdi")
+    with g3:
+        target_ee = st.number_input("EE 下限 %", min_value=0.0, value=80.0, step=5.0, key="real_ml_target_ee")
+    with g4:
+        top_n = st.slider("推荐数", 3, 20, 8, 1, key="real_ml_top_n")
+    with g5:
+        n_trials = st.slider("Optuna 试验次数", 50, 1000, 250, 50, key="real_ml_trials")
+
+    extra1, extra2 = st.columns(2)
+    with extra1:
+        use_dl = st.checkbox("加入 DL 下限约束", value=False, key="real_ml_use_dl")
+        target_dl = st.number_input("DL 下限 %", min_value=0.0, value=5.0, step=1.0, key="real_ml_target_dl", disabled=not use_dl)
+    with extra2:
+        use_flux = st.checkbox("加入 flux 下限约束", value=False, key="real_ml_use_flux")
+        target_flux = st.number_input("flux 下限", min_value=0.0, value=10.0, step=1.0, key="real_ml_target_flux", disabled=not use_flux)
+
+    opt_tab, pareto_tab = st.tabs(["🔎 贝叶斯优化推荐", "🧬 多目标 Pareto 推荐"])
+
+    with opt_tab:
+        st.caption("将 Size、PDI、EE、DL、flux 等目标压成综合评分，使用 Optuna TPE 寻找高分候选处方。")
+        if st.button("运行贝叶斯优化推荐", use_container_width=True, key="real_ml_bayesian_recommend_btn"):
+            try:
+                with st.spinner("Optuna TPE 正在搜索候选处方……"):
+                    rec_df = recommend_with_optuna_bayesian(
+                        bundle,
+                        target_size_max=target_size,
+                        target_pdi_max=target_pdi,
+                        target_ee_min=target_ee,
+                        target_dl_min=target_dl if use_dl else None,
+                        target_flux_min=target_flux if use_flux else None,
+                        top_n=top_n,
+                        n_trials=n_trials,
+                    )
+                st.session_state.ml_recommendation_df = rec_df
+            except Exception as e:
+                st.error(f"贝叶斯优化推荐失败：{e}")
+
+        rec_df = st.session_state.get("ml_recommendation_df")
+        if isinstance(rec_df, pd.DataFrame) and not rec_df.empty:
+            st.markdown("#### 贝叶斯优化推荐结果")
+            safe_dataframe(rec_df, use_container_width=True, height=420)
+            st.caption("说明：结果来自 CatBoost 正向预测 + Optuna TPE 贝叶斯优化。推荐结果用于实验设计参考，仍需真实实验验证。")
+
+    with pareto_tab:
+        st.caption("同时优化多个目标：最小化 Size、最小化 PDI、最大化 EE；可选最大化 DL 和 flux。输出 Pareto 前沿候选。")
+        if st.button("运行 Pareto 多目标优化", use_container_width=True, key="real_ml_pareto_recommend_btn"):
+            try:
+                with st.spinner("Optuna 正在搜索 Pareto 前沿候选处方……"):
+                    pareto_df = recommend_with_optuna_pareto(
+                        bundle,
+                        target_size_max=target_size,
+                        target_pdi_max=target_pdi,
+                        target_ee_min=target_ee,
+                        target_dl_min=target_dl if use_dl else None,
+                        target_flux_min=target_flux if use_flux else None,
+                        top_n=top_n,
+                        n_trials=n_trials,
+                    )
+                st.session_state.ml_pareto_df = pareto_df
+            except Exception as e:
+                st.error(f"Pareto 多目标优化失败：{e}")
+
+        pareto_df = st.session_state.get("ml_pareto_df")
+        if isinstance(pareto_df, pd.DataFrame) and not pareto_df.empty:
+            st.markdown("#### Pareto 多目标推荐结果")
+            safe_dataframe(pareto_df, use_container_width=True, height=420)
+            st.caption("说明：Pareto 结果代表不同目标之间的折中方案，不是单一唯一最优解。")
+
+    if st.button("让 纳米制剂开发助手 解读当前推荐结果", use_container_width=True, key="real_ml_explain_recommendation_btn"):
+        queue_prompt("请解读当前 CatBoost + Optuna 反向推荐结果，说明排名靠前处方的共同特征、可能优势、Pareto 权衡关系和需要实验验证的风险点。")
+
 def render_knowledge_tab(df_main: Optional[pd.DataFrame]) -> None:
     c1, c2 = st.columns([1.0, 1.0])
     with c1:
@@ -2025,33 +3790,383 @@ def render_knowledge_tab(df_main: Optional[pd.DataFrame]) -> None:
                 queue_prompt(f"请解释一下字段 {field_name} 的含义，并说明它在当前数据库里有什么作用")
 
 
+def get_home_metrics(df_main: Optional[pd.DataFrame]) -> List[Tuple[str, Any]]:
+    """首页概览用的关键指标。"""
+    knowledge_count = len([x for x in st.session_state.knowledge_text.splitlines() if x.strip()])
+    if df_main is None or df_main.empty:
+        return [
+            ("数据库记录数", 0),
+            ("有效粒径数", 0),
+            ("有效EE数", 0),
+            ("磷脂类型数", 0),
+            ("Apo类型数", 0),
+            ("知识库条目数", knowledge_count),
+        ]
+    return [
+        ("数据库记录数", len(df_main)),
+        ("有效粒径数", int(df_main["Size_Mean_nm"].notna().sum()) if "Size_Mean_nm" in df_main.columns else 0),
+        ("有效EE数", int(df_main["EE_Percent"].notna().sum()) if "EE_Percent" in df_main.columns else 0),
+        ("磷脂类型数", nonempty_nunique(df_main, "phos_1_type")),
+        ("Apo类型数", nonempty_nunique(df_main, "apo_type")),
+        ("知识库条目数", knowledge_count),
+    ]
+
+
+def switch_page(page_name: str) -> None:
+    st.session_state.active_page = page_name
+    st.rerun()
+
+
+def render_module_header(title: str, subtitle: str) -> None:
+    st.markdown(
+        f"""
+        <div class="module-head">
+            <div class="module-title">{html.escape(title)}</div>
+            <div class="module-sub">{html.escape(subtitle)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_home_page(df_main: Optional[pd.DataFrame]) -> None:
+    """产品化首页：只展示项目概览、功能入口和关键统计，不直接堆叠全部图表。"""
+    st.markdown(
+        f"""
+        <div class="hero">
+            <div class="hero-title">{html.escape(st.session_state.project_name)}</div>
+            <div class="hero-sub">
+                {html.escape(st.session_state.project_desc)}<br>
+                当前数据库：<b>{html.escape(st.session_state.active_db_name)}</b>
+                {" · 工作表：" + html.escape(st.session_state.db_sheet_name) if st.session_state.db_sheet_name else ""}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <div class="feature-grid-title">功能中心</div>
+        <div class="feature-grid-sub">先选择任务类型，再进入对应功能页。原有的数据看板、样本对比、排名分组、实验设计和字段解释均已保留，只是重新归类。</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    cards = [
+        ("📖", "文献解析中心", "文献阅读、重点提炼、知识库检索、字段解释，以及文献数据库可视化图表。", "文献解析中心"),
+        ("🧬", "rHDL纳米制剂处方设计", "根据目标包封率、目标粒径和PDI等约束，逆向生成候选处方与工艺参数。", "rHDL纳米制剂处方设计"),
+        ("📈", "rHDL纳米制剂处方预测", "输入脂质比例、蛋白比例、温度和时间，预测粒径、PDI和包封率。", "rHDL纳米制剂处方预测"),
+        ("🧪", "实验小助手", "面向沉淀、粒径异常、PDI偏高、包封率低等实验问题，提供诊断与SOP辅助。", "实验小助手"),
+        ("🗂️", "数据分析工作台", "保留原有数据筛选、样本对比、排名分组和密码下载功能。", "数据分析工作台"),
+    ]
+
+    rows = [cards[:3], cards[3:]]
+    idx = 0
+    for row in rows:
+        cols = st.columns(len(row))
+        for col, (icon, title, desc, page) in zip(cols, row):
+            with col:
+                st.markdown(
+                    f"""
+                    <div class="feature-card feature-card-{idx % 5}">
+                        <div class="feature-icon">{icon}</div>
+                        <div class="feature-title">{html.escape(title)}</div>
+                        <div class="feature-desc">{html.escape(desc)}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if st.button(f"进入{title}", use_container_width=True, key=f"home_feature_btn_{idx}"):
+                    switch_page(page)
+            idx += 1
+
+    st.markdown("### 项目关键状态")
+    metric_cols = st.columns(6)
+    for col, (label, value) in zip(metric_cols, get_home_metrics(df_main)):
+        with col:
+            st.markdown(
+                f"""
+                <div class="home-stat-card">
+                    <div class="home-stat-label">{html.escape(str(label))}</div>
+                    <div class="home-stat-value">{html.escape(str(value))}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("### 快速操作")
+    q1, q2, q3, q4 = st.columns(4)
+    if q1.button("沉淀原因分析", use_container_width=True, key="home_quick_precipitation"):
+        queue_prompt("为什么我的rHDL体系会出现白色沉淀？请给出可能原因和排查顺序。")
+    if q2.button("高包封率处方", use_container_width=True, key="home_quick_high_ee"):
+        switch_page("rHDL纳米制剂处方设计")
+    if q3.button("文献重点提炼", use_container_width=True, key="home_quick_lit"):
+        switch_page("文献解析中心")
+    if q4.button("数据筛选分析", use_container_width=True, key="home_quick_data"):
+        switch_page("数据分析工作台")
+
+
+def render_literature_page(df_main: Optional[pd.DataFrame]) -> None:
+    """文献解析中心：整合文献解析、知识检索、字段解释和原总览可视化图表。"""
+    render_module_header(
+        "文献解析中心",
+        "用于阅读文献、提炼研究重点、解析处方/工艺字段，并查看文献数据库的整体分布图表。",
+    )
+
+    tabs = st.tabs(["📖 文献重点提炼", "📊 文献数据库可视化", "🔎 知识检索与字段解释"])
+    with tabs[0]:
+        st.markdown("#### 文献内容输入")
+        lit_text = st.text_area(
+            "粘贴文献摘要、方法部分或实验描述",
+            height=240,
+            placeholder="可以粘贴论文摘要、Methods、处方制备过程、表格说明等。",
+            key="literature_parse_textarea",
+        )
+        c1, c2, c3 = st.columns(3)
+        if c1.button("提炼研究重点", use_container_width=True, key="lit_extract_key_points"):
+            if lit_text.strip():
+                queue_prompt("请对以下文献内容进行重点提炼，包括研究对象、处方组成、制备工艺、评价指标和主要结论：\n" + lit_text.strip())
+            else:
+                st.warning("请先粘贴需要解析的文献内容。")
+        if c2.button("提取处方字段", use_container_width=True, key="lit_extract_fields"):
+            if lit_text.strip():
+                queue_prompt("请从以下文献内容中提取rHDL/纳米制剂相关字段，按表格给出处方组成、工艺条件、粒径、PDI、Zeta、EE、DL等信息：\n" + lit_text.strip())
+            else:
+                st.warning("请先粘贴需要解析的文献内容。")
+        if c3.button("生成可引用摘要", use_container_width=True, key="lit_summary_for_paper"):
+            if lit_text.strip():
+                queue_prompt("请将以下文献内容整理成适合论文综述或课题汇报使用的中文摘要，要求客观、简洁、保留关键实验信息：\n" + lit_text.strip())
+            else:
+                st.warning("请先粘贴需要解析的文献内容。")
+
+        st.markdown("#### 解析模板")
+        template_df = pd.DataFrame(
+            [
+                {"输出项": "研究对象", "说明": "材料体系、疾病模型或应用场景"},
+                {"输出项": "处方组成", "说明": "磷脂、胆固醇/中性脂质、Apo/肽、载药成分"},
+                {"输出项": "制备工艺", "说明": "薄膜水化、超声、透析、热循环、纯化方式等"},
+                {"输出项": "评价指标", "说明": "Size、PDI、Zeta、EE、DL、flux等"},
+                {"输出项": "可转入数据库字段", "说明": "建议映射到Excel字段的结构化信息"},
+            ]
+        )
+        safe_dataframe(template_df, use_container_width=True, height=210)
+
+    with tabs[1]:
+        st.markdown("#### 文献数据库可视化")
+        st.caption("这里保留原“总览看板”的所有可视化图表，包括分类分布、粒径/包封率分布、粒径-PDI散点图和同类指标合并后的归一化分布图。")
+        render_overview_tab(df_main)
+
+    with tabs[2]:
+        render_knowledge_tab(df_main)
+
+
+def render_formulation_design_page() -> None:
+    """处方设计：保留demo实验设计器，并新增真实机器学习反向推荐。"""
+    render_module_header(
+        "rHDL纳米制剂处方设计",
+        "从目标指标出发，先用demo设计器快速演示，再用真实Excel数据训练模型并进行处方/工艺参数反向推荐。",
+    )
+    tabs = st.tabs(["🧪 Demo参数设计", "🤖 真实ML反向推荐"])
+    with tabs[0]:
+        render_experiment_tab()
+    with tabs[1]:
+        render_real_ml_recommender_panel(get_active_df())
+
+
+def render_formulation_prediction_page(df_main: Optional[pd.DataFrame]) -> None:
+    """处方预测：输入参数，输出理化参数预测结果。"""
+    render_module_header(
+        "rHDL纳米制剂处方预测",
+        "输入候选处方/工艺参数，预测包封率、粒径和PDI，并可与数据库样本进行对照。",
+    )
+
+    c1, c2 = st.columns([1.1, 1.0], gap="large")
+    with c1:
+        with st.container(border=True):
+            st.markdown("#### 参数输入")
+            lipid_ratio = st.slider("脂质比例 lipid_ratio", 1.0, 8.0, 4.5, 0.1, key="predict_lipid_ratio_slider")
+            protein_ratio = st.slider("蛋白比例 protein_ratio", 0.4, 2.5, 1.2, 0.1, key="predict_protein_ratio_slider")
+            temperature = st.slider("温度 temperature", 20.0, 45.0, 37.0, 0.5, key="predict_temperature_slider")
+            time_min = st.slider("时间 time_min", 5.0, 40.0, 20.0, 1.0, key="predict_time_slider")
+            pred = predict_formulation_impl(lipid_ratio, protein_ratio, temperature, time_min)
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("预测包封率(%)", pred["预测包封率(%)"])
+        m2.metric("预测粒径(nm)", pred["预测粒径(nm)"])
+        m3.metric("预测PDI", pred["预测PDI"])
+
+        if st.button("让 纳米制剂开发助手 解释预测结果", use_container_width=True, key="predict_explain_btn"):
+            queue_prompt(
+                f"请解释这组处方预测结果，并提出优化建议：lipid_ratio={lipid_ratio}, protein_ratio={protein_ratio}, temperature={temperature}, time_min={time_min}。"
+            )
+
+    with c2:
+        result_df = pd.DataFrame(
+            [
+                {"指标": "预测包封率(%)", "数值": pred["预测包封率(%)"]},
+                {"指标": "预测粒径(nm)", "数值": pred["预测粒径(nm)"]},
+                {"指标": "预测PDI", "数值": pred["预测PDI"]},
+            ]
+        )
+        fig = px.bar(result_df, x="指标", y="数值", title="当前处方预测输出")
+        st.plotly_chart(style_plotly(fig), use_container_width=True)
+
+        st.markdown("#### 当前参数快照")
+        snapshot = pd.DataFrame(
+            [
+                {
+                    "脂质比例": lipid_ratio,
+                    "蛋白比例": protein_ratio,
+                    "温度": temperature,
+                    "时间(min)": time_min,
+                    "预测包封率(%)": pred["预测包封率(%)"],
+                    "预测粒径(nm)": pred["预测粒径(nm)"],
+                    "预测PDI": pred["预测PDI"],
+                }
+            ]
+        )
+        safe_dataframe(snapshot, use_container_width=True, height=140)
+
+    if df_main is not None and not df_main.empty:
+        st.markdown("#### 数据库相似样本参考")
+        available_cols = [c for c in ["formulation_name", "phos_1_type", "apo_type", "method_assembly", "Size_Mean_nm", "PDI", "EE_Percent"] if c in df_main.columns]
+        if available_cols:
+            work = df_main[available_cols].copy()
+            if "Size_Mean_nm" in work.columns:
+                work["与预测粒径差值"] = (pd.to_numeric(work["Size_Mean_nm"], errors="coerce") - pred["预测粒径(nm)"]).abs()
+                work = work.sort_values("与预测粒径差值", na_position="last").head(12)
+            safe_dataframe(work, use_container_width=True, height=320)
+
+
+def render_lab_assistant_page(df_main: Optional[pd.DataFrame]) -> None:
+    """实验小助手：异常诊断、SOP、实验建议。"""
+    render_module_header(
+        "实验小助手",
+        "面向实验过程中的异常现象、SOP生成和记录整理，配合右侧聊天区完成解释和建议生成。",
+    )
+
+    st.markdown("#### 常见实验问题")
+    b1, b2, b3, b4 = st.columns(4)
+    if b1.button("白色沉淀诊断", use_container_width=True, key="lab_precipitation_btn"):
+        queue_prompt("我的rHDL/纳米制剂体系出现白色沉淀，请按原料、比例、温度、超声/透析、储存条件给出排查流程。")
+    if b2.button("粒径异常偏大", use_container_width=True, key="lab_size_btn"):
+        queue_prompt("我的rHDL纳米制剂粒径异常偏大，请分析可能原因并给出优化方案。")
+    if b3.button("PDI偏高", use_container_width=True, key="lab_pdi_btn"):
+        queue_prompt("我的rHDL纳米制剂PDI偏高，说明分布不均一，请给出原因分析和实验优化建议。")
+    if b4.button("包封率低", use_container_width=True, key="lab_ee_btn"):
+        queue_prompt("我的rHDL纳米制剂包封率偏低，请从处方组成和制备工艺两方面给出优化建议。")
+
+    st.markdown("#### SOP 与实验记录")
+    sop_text = st.text_area(
+        "输入已确定的处方或实验条件",
+        height=160,
+        placeholder="例如：DMPC:ApoA-I=4:1，37℃孵育，超声10min，目标粒径<100nm……",
+        key="lab_sop_textarea",
+    )
+    c1, c2, c3 = st.columns(3)
+    if c1.button("生成SOP", use_container_width=True, key="lab_generate_sop"):
+        if sop_text.strip():
+            queue_prompt("请根据以下处方和工艺条件生成一份分步骤实验SOP，包含注意事项和质量控制点：\n" + sop_text.strip())
+        else:
+            st.warning("请先输入处方或实验条件。")
+    if c2.button("整理实验记录", use_container_width=True, key="lab_record_clean"):
+        if sop_text.strip():
+            queue_prompt("请将以下实验记录整理成规范的实验日志格式，并指出缺失信息：\n" + sop_text.strip())
+        else:
+            st.warning("请先输入实验记录。")
+    if c3.button("生成下一步实验建议", use_container_width=True, key="lab_next_suggestion"):
+        if sop_text.strip():
+            queue_prompt("请根据以下实验情况给出下一步优化实验建议：\n" + sop_text.strip())
+        else:
+            queue_prompt("请根据当前rHDL纳米制剂开发项目，给出下一步实验优化建议。")
+
+    st.markdown("#### 知识库快速检索")
+    render_knowledge_tab(df_main)
+
+
+def render_data_analysis_workspace(df_main: Optional[pd.DataFrame]) -> None:
+    """数据分析工作台：保留原数据工作台、样本对比、排名与分组。"""
+    render_module_header(
+        "数据分析工作台",
+        "用于数据库筛选、样本对比、指标排序和分组统计。表格导出仍需输入下载密码。",
+    )
+    tabs = st.tabs(["🗂️ 数据筛选", "🆚 样本对比", "🏆 排名与分组"])
+    with tabs[0]:
+        render_datawork_tab(df_main)
+    with tabs[1]:
+        render_compare_tab(df_main)
+    with tabs[2]:
+        render_ranking_tab(df_main)
+
+
+def render_page_navigation() -> str:
+    """
+    顶部功能导航。
+
+    注意：这里不用 st.radio / st.segmented_control 做导航，
+    因为首页功能卡片也会修改 active_page。
+    如果 radio 带 key，Streamlit 会优先保留 radio 自己的旧值，
+    导致卡片按钮点击后又被 radio 的旧值覆盖，看起来像“进不去子界面”。
+    因此改成纯按钮导航，所有入口统一修改 st.session_state.active_page。
+    """
+    pages = [
+        "首页概览",
+        "文献解析中心",
+        "rHDL纳米制剂处方设计",
+        "rHDL纳米制剂处方预测",
+        "实验小助手",
+        "数据分析工作台",
+    ]
+    page_labels = {
+        "首页概览": "首页概览",
+        "文献解析中心": "文献解析",
+        "rHDL纳米制剂处方设计": "处方设计",
+        "rHDL纳米制剂处方预测": "处方预测",
+        "实验小助手": "实验小助手",
+        "数据分析工作台": "数据工作台",
+    }
+
+    if st.session_state.get("active_page") not in pages:
+        st.session_state.active_page = "首页概览"
+
+    st.markdown('<div class="nav-panel">', unsafe_allow_html=True)
+    cols = st.columns(len(pages))
+    for i, page in enumerate(pages):
+        active = st.session_state.active_page == page
+        label = page_labels.get(page, page)
+        button_label = f"● {label}" if active else label
+        if cols[i].button(
+            button_label,
+            use_container_width=True,
+            key=f"main_nav_button_{i}",
+            type="primary" if active else "secondary",
+        ):
+            if st.session_state.active_page != page:
+                switch_page(page)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    return st.session_state.active_page
+
 def render_main_area(df_main: Optional[pd.DataFrame]) -> None:
     left_col, right_col = st.columns([3.9, 2.9], gap="large")
 
     with left_col:
-        render_header(df_main)
-        tabs = st.tabs(
-            [
-                "📌 总览看板",
-                "🗂️ 数据工作台",
-                "🆚 样本对比",
-                "🏆 排名与分组",
-                "🧪 实验设计器",
-                "📚 知识与字段工作台",
-            ]
-        )
-        with tabs[0]:
-            render_overview_tab(df_main)
-        with tabs[1]:
-            render_datawork_tab(df_main)
-        with tabs[2]:
-            render_compare_tab(df_main)
-        with tabs[3]:
-            render_ranking_tab(df_main)
-        with tabs[4]:
-            render_experiment_tab()
-        with tabs[5]:
-            render_knowledge_tab(df_main)
+        selected_page = render_page_navigation()
+        if selected_page == "首页概览":
+            render_home_page(df_main)
+        elif selected_page == "文献解析中心":
+            render_literature_page(df_main)
+        elif selected_page == "rHDL纳米制剂处方设计":
+            render_formulation_design_page()
+        elif selected_page == "rHDL纳米制剂处方预测":
+            render_formulation_prediction_page(df_main)
+        elif selected_page == "实验小助手":
+            render_lab_assistant_page(df_main)
+        elif selected_page == "数据分析工作台":
+            render_data_analysis_workspace(df_main)
+        else:
+            render_home_page(df_main)
 
     with right_col:
         render_chat_panel()
@@ -2127,17 +4242,23 @@ def render_chat_panel() -> None:
 
     st.markdown('<div class="copilot-divider"></div>', unsafe_allow_html=True)
 
+    st.markdown('<div class="chat-composer-caption">向纳米制剂开发助手发送消息</div>', unsafe_allow_html=True)
     with st.form("smu_agent_chat_form", clear_on_submit=True):
-        user_text = st.text_area(
-            "输入问题",
-            placeholder="向 纳米制剂开发助手 发送消息，例如：帮我筛选 apo_type=22A 且粒径小于100nm 的样本",
-            label_visibility="collapsed",
-            height=92,
-            key="right_chat_input_textarea",
-        )
-        b1, b2 = st.columns([1.0, 1.0])
-        send_btn = b1.form_submit_button("发送", use_container_width=True)
-        clear_btn = b2.form_submit_button("清空聊天", use_container_width=True)
+        input_col, send_col = st.columns([8.2, 1.0], gap="small")
+        with input_col:
+            user_text = st.text_area(
+                "输入问题",
+                placeholder="例如：帮我筛选 apo_type=22A 且粒径小于100nm 的样本",
+                label_visibility="collapsed",
+                height=74,
+                key="right_chat_input_textarea",
+            )
+        with send_col:
+            send_btn = st.form_submit_button("↑", use_container_width=True, type="primary")
+
+    st.markdown('<div class="chat-clear-row">', unsafe_allow_html=True)
+    clear_btn = st.button("清空聊天", use_container_width=True, key="right_clear_chat_btn")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
