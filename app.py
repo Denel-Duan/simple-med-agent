@@ -5,6 +5,7 @@ import random
 import re
 import html
 from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
 
 import pandas as pd
 import plotly.express as px
@@ -3308,15 +3309,408 @@ def _catboost_predict(bundle: Dict[str, Any], X_candidate: pd.DataFrame) -> Dict
     return preds
 
 
+
+# =========================
+# 机器学习可信度增强：字段映射、数据质量、交叉验证、适用域、报告导出
+# =========================
+def _missing_like_mask(series: pd.Series) -> pd.Series:
+    """识别 Excel 文献数据中的空值/未报道/无该组分等缺失式写法。"""
+    if series is None:
+        return pd.Series(dtype=bool)
+    s = series.copy()
+    mask = s.isna()
+    ss = s.astype(str).str.strip().str.lower()
+    miss_tokens = {"", "nan", "none", "null", "na", "n/a", "unknown", "not reported", "nr", "无", "未报道", "未测"}
+    return mask | ss.isin(miss_tokens)
+
+
+def _series_examples(series: pd.Series, n: int = 4) -> str:
+    vals = []
+    try:
+        cleaned = series[~_missing_like_mask(series)].astype(str).str.strip()
+        vals = cleaned.drop_duplicates().head(n).tolist()
+    except Exception:
+        vals = []
+    return ", ".join(vals)
+
+
+def _numeric_target_quality(target_name: str, y: pd.Series) -> Dict[str, Any]:
+    y_num = pd.to_numeric(y, errors="coerce")
+    non_null = int(y_num.notna().sum())
+    missing = int(y_num.isna().sum())
+    invalid = 0
+    warn = []
+    if non_null > 0:
+        if target_name == "Size_Mean_nm":
+            invalid = int((y_num.dropna() <= 0).sum())
+            if invalid:
+                warn.append("粒径<=0")
+        elif target_name == "PDI":
+            invalid = int(((y_num.dropna() < 0) | (y_num.dropna() > 1.2)).sum())
+            if invalid:
+                warn.append("PDI超出常见范围")
+        elif target_name in {"EE_Percent", "DL_Percent"}:
+            invalid = int(((y_num.dropna() < 0) | (y_num.dropna() > 100)).sum())
+            if invalid:
+                warn.append("百分比超出0-100")
+    return {
+        "目标字段": target_name,
+        "有效样本数": non_null,
+        "缺失数": missing,
+        "缺失率": round(float(missing / max(len(y_num), 1)), 4),
+        "最小值": None if non_null == 0 else round(float(y_num.min()), 4),
+        "最大值": None if non_null == 0 else round(float(y_num.max()), 4),
+        "异常值数": invalid,
+        "质量提示": "；".join(warn) if warn else "基本正常",
+    }
+
+
+def build_field_mapping_quality_report(df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    """字段映射与数据质量检查。返回输入字段、目标字段、异常摘要三个表。"""
+    clean = clean_dataframe(df)
+    X_raw, y_map, target_sources, feature_cols = build_ml_modeling_frame(df)
+    X_model, numeric_cols, categorical_cols = _infer_feature_types_for_catboost(X_raw)
+
+    feature_rows: List[Dict[str, Any]] = []
+    for col in feature_cols:
+        s = X_raw[col] if col in X_raw.columns else pd.Series(dtype=object)
+        miss_mask = _missing_like_mask(s)
+        feature_rows.append({
+            "字段": col,
+            "角色": "输入X：配方/工艺",
+            "推断类型": "数值" if col in numeric_cols else "类别",
+            "缺失/none数": int(miss_mask.sum()),
+            "缺失/none率": round(float(miss_mask.mean()), 4) if len(s) else None,
+            "唯一值数": int(s.astype(str).nunique(dropna=True)) if len(s) else 0,
+            "示例值": _series_examples(s, 4),
+        })
+
+    target_rows: List[Dict[str, Any]] = []
+    for target_name, y in y_map.items():
+        q = _numeric_target_quality(target_name, y)
+        q["角色"] = "输出Y：产品性质/评价指标"
+        q["来源列"] = ", ".join(target_sources.get(target_name, []))
+        target_rows.append(q)
+
+    raw_cols = set(map(str, clean.columns))
+    recognized_sources = set()
+    for cols in target_sources.values():
+        recognized_sources.update(map(str, cols))
+    recognized_all = set(map(str, feature_cols)) | recognized_sources
+    unrecognized = [c for c in clean.columns if str(c) not in recognized_all and _column_name_lc(c) not in {"ref_id", "formulation_name", "record_id", "source", "title", "doi", "journal", "year"}]
+
+    issue_rows: List[Dict[str, Any]] = []
+    for row in target_rows:
+        if row.get("异常值数", 0) or row.get("有效样本数", 0) < 20:
+            issue_rows.append({
+                "类型": "目标字段",
+                "字段": row.get("目标字段"),
+                "问题": row.get("质量提示"),
+                "建议": "样本少或异常值较多时，该目标模型的可信度会下降。",
+            })
+    high_missing = [r for r in feature_rows if (r.get("缺失/none率") is not None and r.get("缺失/none率") >= 0.75)]
+    for r in high_missing[:20]:
+        issue_rows.append({
+            "类型": "输入字段",
+            "字段": r.get("字段"),
+            "问题": f"缺失/none率较高：{r.get('缺失/none率')}",
+            "建议": "该字段仍可作为类别/数值特征参与训练，但推荐结果需要结合实验可得性判断。",
+        })
+    if unrecognized:
+        issue_rows.append({
+            "类型": "字段识别",
+            "字段": f"{len(unrecognized)} 个字段未进入训练/目标集合",
+            "问题": ", ".join(map(str, unrecognized[:12])) + (" ..." if len(unrecognized) > 12 else ""),
+            "建议": "如这些字段包含关键处方或结果信息，可在后续版本中加入字段映射规则。",
+        })
+
+    return {
+        "input_features": pd.DataFrame(feature_rows),
+        "target_mapping": pd.DataFrame(target_rows),
+        "issues": pd.DataFrame(issue_rows) if issue_rows else pd.DataFrame([{"类型": "总体", "字段": "-", "问题": "未发现明显字段映射问题", "建议": "可继续训练模型。"}]),
+    }
+
+
+def _fit_catboost_cv_regressor(X_train: pd.DataFrame, y_train: pd.Series, cat_cols: List[str]) -> Any:
+    """交叉验证阶段使用较轻量的 CatBoost，避免 Streamlit 交互过慢。"""
+    if not CATBOOST_AVAILABLE:
+        raise RuntimeError("当前环境未安装 catboost。")
+    model = CatBoostRegressor(
+        iterations=280,
+        learning_rate=0.045,
+        depth=5,
+        l2_leaf_reg=7.0,
+        loss_function="RMSE",
+        random_seed=42,
+        verbose=False,
+        allow_writing_files=False,
+        nan_mode="Min",
+    )
+    model.fit(Pool(X_train, y_train, cat_features=cat_cols))
+    return model
+
+
+def _cross_validate_catboost(X_sub: pd.DataFrame, y_sub: pd.Series, cat_cols: List[str], folds: int = 5) -> Dict[str, Optional[float]]:
+    """K 折交叉验证，返回 MAE/R² 均值与标准差。"""
+    from sklearn.model_selection import KFold
+
+    n = len(X_sub)
+    if n < 30:
+        return {"cv_folds": None, "cv_mae_mean": None, "cv_mae_std": None, "cv_r2_mean": None, "cv_r2_std": None}
+
+    k = min(int(folds), 5, max(3, n // 12))
+    k = max(3, k)
+    kf = KFold(n_splits=k, shuffle=True, random_state=42)
+    maes: List[float] = []
+    r2s: List[float] = []
+
+    for train_idx, test_idx in kf.split(X_sub):
+        X_train = X_sub.iloc[train_idx]
+        X_test = X_sub.iloc[test_idx]
+        y_train = y_sub.iloc[train_idx]
+        y_test = y_sub.iloc[test_idx]
+        if len(y_test) < 2:
+            continue
+        model = _fit_catboost_cv_regressor(X_train, y_train, cat_cols)
+        pred = model.predict(X_test)
+        maes.append(float(mean_absolute_error(y_test, pred)))
+        try:
+            r2s.append(float(r2_score(y_test, pred)))
+        except Exception:
+            pass
+
+    return {
+        "cv_folds": k,
+        "cv_mae_mean": None if not maes else float(pd.Series(maes).mean()),
+        "cv_mae_std": None if len(maes) < 2 else float(pd.Series(maes).std()),
+        "cv_r2_mean": None if not r2s else float(pd.Series(r2s).mean()),
+        "cv_r2_std": None if len(r2s) < 2 else float(pd.Series(r2s).std()),
+    }
+
+
+def _historical_row_label(source_df: Optional[pd.DataFrame], idx: int) -> str:
+    if source_df is None or idx < 0 or idx >= len(source_df):
+        return f"row_{idx}"
+    row = source_df.iloc[idx]
+    pieces = []
+    for col in ["ref_id", "formulation_name", "apo_type", "method_assembly"]:
+        if col in source_df.columns and pd.notna(row.get(col)) and str(row.get(col)).strip() not in {"", "none", "nan"}:
+            pieces.append(f"{col}={row.get(col)}")
+    return " | ".join(pieces) if pieces else f"row_{idx}"
+
+
+def assess_applicability_domain(bundle: Dict[str, Any], candidate: pd.DataFrame, k: int = 3) -> Dict[str, Any]:
+    """基于候选方案与历史训练样本的距离评估适用域与可信度。"""
+    X_base = bundle.get("X_base")
+    if not isinstance(X_base, pd.DataFrame) or X_base.empty:
+        return {"confidence": "未知", "distance": None, "similar_refs": [], "similar_rows": []}
+
+    cand = prepare_candidates_for_catboost(bundle, candidate).iloc[0]
+    numeric_cols = [c for c in bundle.get("numeric_cols", []) if c in X_base.columns]
+    categorical_cols = [c for c in bundle.get("categorical_cols", []) if c in X_base.columns]
+    num_ranges = bundle.get("num_ranges", {})
+
+    distances = []
+    for idx, row in X_base.iterrows():
+        num_d = 0.0
+        num_n = 0
+        for col in numeric_cols:
+            lo, hi = num_ranges.get(col, (0.0, 0.0))
+            denom = max(abs(float(hi) - float(lo)), 1e-6)
+            try:
+                num_d += abs(float(cand[col]) - float(row[col])) / denom
+                num_n += 1
+            except Exception:
+                continue
+        num_d = num_d / max(num_n, 1)
+
+        cat_d = 0.0
+        cat_n = 0
+        for col in categorical_cols:
+            try:
+                cat_d += 0.0 if str(cand[col]) == str(row[col]) else 1.0
+                cat_n += 1
+            except Exception:
+                continue
+        cat_d = cat_d / max(cat_n, 1)
+
+        dist = 0.62 * num_d + 0.38 * cat_d
+        distances.append((idx, float(dist)))
+
+    distances.sort(key=lambda x: x[1])
+    best = distances[:max(1, k)]
+    best_dist = best[0][1] if best else None
+    if best_dist is None:
+        confidence = "未知"
+    elif best_dist <= 0.18:
+        confidence = "高"
+    elif best_dist <= 0.38:
+        confidence = "中"
+    else:
+        confidence = "低"
+
+    source_df = bundle.get("source_df")
+    similar_refs = [_historical_row_label(source_df, int(i)) for i, _d in best]
+    return {
+        "confidence": confidence,
+        "distance": None if best_dist is None else round(float(best_dist), 4),
+        "similar_refs": similar_refs,
+        "similar_rows": [int(i) for i, _d in best],
+    }
+
+
+def generate_recommendation_reason(
+    preds: Dict[str, float],
+    confidence: str,
+    similar_refs: List[str],
+    target_size_max: Optional[float],
+    target_pdi_max: Optional[float],
+    target_ee_min: Optional[float],
+    target_dl_min: Optional[float] = None,
+    target_flux_min: Optional[float] = None,
+) -> str:
+    reasons: List[str] = []
+    if target_size_max is not None and "Size_Mean_nm" in preds:
+        v = preds.get("Size_Mean_nm")
+        if pd.notna(v):
+            reasons.append(f"粒径预测{v:.2f} nm，" + ("满足" if v <= target_size_max else "高于") + f"目标上限{target_size_max:g} nm")
+    if target_pdi_max is not None and "PDI" in preds:
+        v = preds.get("PDI")
+        if pd.notna(v):
+            reasons.append(f"PDI预测{v:.3f}，" + ("满足" if v <= target_pdi_max else "高于") + f"目标上限{target_pdi_max:g}")
+    if target_ee_min is not None and "EE_Percent" in preds:
+        v = preds.get("EE_Percent")
+        if pd.notna(v):
+            reasons.append(f"EE预测{v:.2f}%，" + ("达到" if v >= target_ee_min else "低于") + f"目标下限{target_ee_min:g}%")
+    if target_dl_min is not None and "DL_Percent" in preds:
+        v = preds.get("DL_Percent")
+        if pd.notna(v):
+            reasons.append(f"DL预测{v:.2f}%")
+    if target_flux_min is not None and "flux" in preds:
+        v = preds.get("flux")
+        if pd.notna(v):
+            reasons.append(f"flux预测{v:.2f}")
+    reasons.append(f"适用域可信度：{confidence}")
+    if similar_refs:
+        reasons.append("相似文献样本：" + "；".join(similar_refs[:2]))
+    return "；".join(reasons)
+
+
+def annotate_recommendations_with_trust(
+    bundle: Dict[str, Any],
+    df: pd.DataFrame,
+    target_size_max: Optional[float] = None,
+    target_pdi_max: Optional[float] = None,
+    target_ee_min: Optional[float] = None,
+    target_dl_min: Optional[float] = None,
+    target_flux_min: Optional[float] = None,
+) -> pd.DataFrame:
+    """给推荐结果增加适用域可信度、相似文献样本和规则化推荐理由。"""
+    if df is None or df.empty:
+        return df
+    out = df.copy()
+    confidences = []
+    distances = []
+    similar_1 = []
+    similar_2 = []
+    similar_3 = []
+    reasons = []
+
+    for _, row in out.iterrows():
+        cand = pd.DataFrame([row.to_dict()])
+        preds: Dict[str, float] = {}
+        for col in out.columns:
+            if col.startswith("预测_"):
+                target = col.replace("预测_", "", 1)
+                try:
+                    preds[target] = float(row[col])
+                except Exception:
+                    pass
+        ad = assess_applicability_domain(bundle, cand, k=3)
+        refs = ad.get("similar_refs", []) or []
+        confidences.append(ad.get("confidence", "未知"))
+        distances.append(ad.get("distance", None))
+        similar_1.append(refs[0] if len(refs) > 0 else "")
+        similar_2.append(refs[1] if len(refs) > 1 else "")
+        similar_3.append(refs[2] if len(refs) > 2 else "")
+        reasons.append(generate_recommendation_reason(
+            preds,
+            ad.get("confidence", "未知"),
+            refs,
+            target_size_max,
+            target_pdi_max,
+            target_ee_min,
+            target_dl_min,
+            target_flux_min,
+        ))
+
+    out["可信度"] = confidences
+    out["适用域距离"] = distances
+    out["相似文献1"] = similar_1
+    out["相似文献2"] = similar_2
+    out["相似文献3"] = similar_3
+    out["推荐理由"] = reasons
+    return out
+
+
+def _df_to_markdown_table(df: Optional[pd.DataFrame], max_rows: int = 30) -> str:
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return "无数据。"
+    work = df.head(max_rows).copy().where(pd.notnull(df.head(max_rows)), "")
+    cols = [str(c) for c in work.columns]
+    lines = ["| " + " | ".join(cols) + " |", "| " + " | ".join(["---"] * len(cols)) + " |"]
+    for _, row in work.iterrows():
+        vals = [str(row.get(c, "")).replace("\n", " ").replace("|", "/") for c in work.columns]
+        lines.append("| " + " | ".join(vals) + " |")
+    if len(df) > max_rows:
+        lines.append(f"\n> 仅展示前 {max_rows} 行，共 {len(df)} 行。")
+    return "\n".join(lines)
+
+
+def generate_model_training_report(
+    bundle: Optional[Dict[str, Any]],
+    quality_report: Optional[Dict[str, pd.DataFrame]] = None,
+    rec_df: Optional[pd.DataFrame] = None,
+    pareto_df: Optional[pd.DataFrame] = None,
+) -> str:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines = [
+        "# 仿生rHDL纳米制剂开发助手：模型训练与推荐报告",
+        "",
+        f"生成时间：{now}",
+        "",
+        "## 1. 建模说明",
+        "本报告由平台自动生成。当前模型路线为 CatBoost 正向预测模型 + Optuna 贝叶斯优化 / Pareto 多目标优化。训练方向为：配方组成与工艺参数 X → 产品理化性质与功能指标 Y。反向推荐通过候选处方搜索、模型预测和目标函数排序实现。",
+        "",
+    ]
+    if isinstance(quality_report, dict):
+        lines += ["## 2. 字段映射与数据质量", "", "### 2.1 输出目标字段", _df_to_markdown_table(quality_report.get("target_mapping"), 20), "", "### 2.2 数据质量提示", _df_to_markdown_table(quality_report.get("issues"), 30), ""]
+    if isinstance(bundle, dict):
+        lines += ["## 3. 模型评价指标", _df_to_markdown_table(bundle.get("summary"), 20), ""]
+        if bundle.get("feature_importance"):
+            lines += ["## 4. 特征重要性摘要", ""]
+            for target, fi in bundle.get("feature_importance", {}).items():
+                lines += [f"### {target}", _df_to_markdown_table(fi, 15), ""]
+    if isinstance(rec_df, pd.DataFrame) and not rec_df.empty:
+        lines += ["## 5. 贝叶斯优化推荐结果", _df_to_markdown_table(rec_df, 15), ""]
+    if isinstance(pareto_df, pd.DataFrame) and not pareto_df.empty:
+        lines += ["## 6. Pareto 多目标推荐结果", _df_to_markdown_table(pareto_df, 15), ""]
+    lines += ["## 7. 使用提示", "推荐结果为模型预测与优化搜索所得，适合用于实验方案优先级排序，不应替代真实实验验证。可信度为基于推荐处方与历史文献样本距离计算的适用域指标，可信度低表示外推风险较高。", ""]
+    return "\n".join(lines)
+
+
 def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
-    """训练 CatBoost 正向预测模型，并生成评估指标与特征重要性。"""
+    """训练 CatBoost 正向预测模型，并生成 holdout + K折交叉验证评价、特征重要性和字段质量报告。"""
     if not SKLEARN_AVAILABLE:
         raise RuntimeError("当前环境未安装 scikit-learn。请在 requirements.txt 中加入 scikit-learn。")
     if not CATBOOST_AVAILABLE:
         raise RuntimeError("当前环境未安装 catboost。请在 requirements.txt 中加入 catboost 后重新部署。")
 
+    quality_report = build_field_mapping_quality_report(df)
+    cleaned_source = clean_dataframe(df).reset_index(drop=True)
     X_raw, y_map, target_sources, feature_cols = build_ml_modeling_frame(df)
     X_model, numeric_cols, categorical_cols = _infer_feature_types_for_catboost(X_raw)
+    X_model = X_model.reset_index(drop=True)
 
     if not feature_cols:
         raise RuntimeError("没有识别到可用于训练的配方/工艺输入特征。")
@@ -3327,7 +3721,7 @@ def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
     feature_importance: Dict[str, pd.DataFrame] = {}
 
     for target_name, y in y_map.items():
-        y = pd.to_numeric(y, errors="coerce")
+        y = pd.to_numeric(y, errors="coerce").reset_index(drop=True)
         mask = y.notna()
         n = int(mask.sum())
         source_cols = target_sources.get(target_name, [])
@@ -3337,8 +3731,13 @@ def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
                 "目标": target_name,
                 "训练样本数": n,
                 "状态": "样本不足，暂不训练",
-                "MAE": None,
-                "R2": None,
+                "Holdout_MAE": None,
+                "Holdout_R2": None,
+                "CV折数": None,
+                "CV_MAE均值": None,
+                "CV_MAE标准差": None,
+                "CV_R2均值": None,
+                "CV_R2标准差": None,
                 "来源列": ", ".join(source_cols),
             })
             continue
@@ -3348,6 +3747,7 @@ def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
 
         mae = None
         r2 = None
+        cv = {"cv_folds": None, "cv_mae_mean": None, "cv_mae_std": None, "cv_r2_mean": None, "cv_r2_std": None}
         try:
             if n >= 30:
                 X_train, X_test, y_train, y_test = train_test_split(X_sub, y_sub, test_size=0.22, random_state=42)
@@ -3355,6 +3755,7 @@ def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
                 pred = model_eval.predict(X_test)
                 mae = float(mean_absolute_error(y_test, pred))
                 r2 = float(r2_score(y_test, pred)) if len(y_test) >= 2 else None
+                cv = _cross_validate_catboost(X_sub, y_sub, categorical_cols, folds=5)
 
             # 最终用所有非空目标样本重训，用于优化推荐。
             model_final = _fit_catboost_regressor(X_sub, y_sub, categorical_cols)
@@ -3373,8 +3774,13 @@ def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
                 "目标": target_name,
                 "训练样本数": n,
                 "状态": "已训练-CatBoost",
-                "MAE": None if mae is None else round(mae, 4),
-                "R2": None if r2 is None else round(r2, 4),
+                "Holdout_MAE": None if mae is None else round(mae, 4),
+                "Holdout_R2": None if r2 is None else round(r2, 4),
+                "CV折数": cv.get("cv_folds"),
+                "CV_MAE均值": None if cv.get("cv_mae_mean") is None else round(cv.get("cv_mae_mean"), 4),
+                "CV_MAE标准差": None if cv.get("cv_mae_std") is None else round(cv.get("cv_mae_std"), 4),
+                "CV_R2均值": None if cv.get("cv_r2_mean") is None else round(cv.get("cv_r2_mean"), 4),
+                "CV_R2标准差": None if cv.get("cv_r2_std") is None else round(cv.get("cv_r2_std"), 4),
                 "来源列": ", ".join(source_cols),
             })
         except Exception as e:
@@ -3382,8 +3788,13 @@ def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
                 "目标": target_name,
                 "训练样本数": n,
                 "状态": f"训练失败：{e}",
-                "MAE": None,
-                "R2": None,
+                "Holdout_MAE": None,
+                "Holdout_R2": None,
+                "CV折数": None,
+                "CV_MAE均值": None,
+                "CV_MAE标准差": None,
+                "CV_R2均值": None,
+                "CV_R2标准差": None,
                 "来源列": ", ".join(source_cols),
             })
 
@@ -3407,15 +3818,17 @@ def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
     for col in categorical_cols:
         vals = clean_categorical_series(X_candidate_base[col]).astype(str).unique().tolist()
         vals = [v for v in vals if str(v).strip()]
-        # 避免类别空间太大导致 Optuna 太慢；保留出现频次最高的前 35 类。
         if len(vals) > 35:
             vals = X_candidate_base[col].astype(str).value_counts().head(35).index.tolist()
         cat_values[col] = vals if vals else ["none"]
 
+    summary_df = pd.DataFrame(summary_rows)
+
     return {
-        "algorithm": "CatBoostRegressor + Optuna",
+        "algorithm": "CatBoostRegressor + Optuna + ApplicabilityDomain",
         "models": models,
-        "summary": pd.DataFrame(summary_rows),
+        "summary": summary_df,
+        "quality_report": quality_report,
         "feature_importance": feature_importance,
         "feature_cols": feature_cols,
         "numeric_cols": numeric_cols,
@@ -3423,10 +3836,10 @@ def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
         "target_sources": target_sources,
         "target_ranges": target_ranges,
         "X_base": X_candidate_base,
+        "source_df": cleaned_source,
         "num_ranges": num_ranges,
         "cat_values": cat_values,
     }
-
 
 def prepare_candidates_for_catboost(bundle: Dict[str, Any], candidates: pd.DataFrame) -> pd.DataFrame:
     """确保候选处方的列顺序、类型与 CatBoost 训练阶段一致。"""
@@ -3532,7 +3945,7 @@ def _score_predictions(
 def _format_recommendation_table(df: pd.DataFrame) -> pd.DataFrame:
     """推荐结果列排序。"""
     preferred = [
-        "优化模式", "综合评分",
+        "优化模式", "综合评分", "可信度", "适用域距离", "推荐理由", "相似文献1", "相似文献2", "相似文献3",
         "phos_1_type", "phos_1_ratio", "phos_2_type", "phos_2_ratio", "phos_3_type", "phos_3_ratio",
         "chol_ratio", "neutral_lipid_1_type", "neutral_lipid_1_ratio", "neutral_lipid_2_type", "neutral_lipid_2_ratio",
         "helper_lipid_1_type", "helper_lipid_1_ratio", "helper_lipid_2_type", "helper_lipid_2_ratio",
@@ -3544,7 +3957,6 @@ def _format_recommendation_table(df: pd.DataFrame) -> pd.DataFrame:
     show_cols = [c for c in preferred if c in df.columns] + pred_cols + pareto_cols
     show_cols = list(dict.fromkeys(show_cols))
     return df[show_cols]
-
 
 def recommend_with_optuna_bayesian(
     bundle: Dict[str, Any],
@@ -3609,6 +4021,15 @@ def recommend_with_optuna_bayesian(
 
     out = pd.DataFrame(records)
     out = out.sort_values("综合评分", ascending=False).drop_duplicates().head(top_n).reset_index(drop=True)
+    out = annotate_recommendations_with_trust(
+        bundle,
+        out,
+        target_size_max=target_size_max,
+        target_pdi_max=target_pdi_max,
+        target_ee_min=target_ee_min,
+        target_dl_min=target_dl_min,
+        target_flux_min=target_flux_min,
+    )
     return _format_recommendation_table(out)
 
 
@@ -3699,13 +4120,22 @@ def recommend_with_optuna_pareto(
 
     out = pd.DataFrame(records)
     out = out.sort_values("综合评分", ascending=False).drop_duplicates().head(top_n).reset_index(drop=True)
+    out = annotate_recommendations_with_trust(
+        bundle,
+        out,
+        target_size_max=target_size_max,
+        target_pdi_max=target_pdi_max,
+        target_ee_min=target_ee_min,
+        target_dl_min=target_dl_min,
+        target_flux_min=target_flux_min,
+    )
     return _format_recommendation_table(out)
 
 
 def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
     st.markdown("---")
     st.markdown("### CatBoost + Optuna 真实机器学习反向推荐")
-    st.caption("使用 Excel 文献数据库训练 CatBoost 正向模型，再用 Optuna 贝叶斯优化和 Pareto 多目标优化搜索推荐处方。")
+    st.caption("新增字段映射检查、数据质量检查、CatBoost交叉验证、适用域可信度、相似文献溯源和训练报告导出。")
 
     if df_main is None or df_main.empty:
         st.info("请先在左侧上传或加载 Excel 数据表。")
@@ -3723,14 +4153,32 @@ def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
         st.code("streamlit\nopenai>=1.0\npython-dotenv\npandas\nplotly\nopenpyxl\nscikit-learn\njoblib\ncatboost\noptuna", language="text")
         return
 
+    with st.expander("① 字段映射与数据质量检查", expanded=True):
+        try:
+            quality_report = build_field_mapping_quality_report(df_main)
+            st.session_state.ml_quality_report = quality_report
+            q_tabs = st.tabs(["输出目标映射", "输入特征映射", "数据质量提示"])
+            with q_tabs[0]:
+                st.caption("系统会把 EE_1/EE_2、DL_1/DL_2 和多个 flux 字段按同类指标合并；输出Y缺失不填0，而是按目标分别训练。")
+                safe_dataframe(quality_report.get("target_mapping", pd.DataFrame()), use_container_width=True, height=240)
+            with q_tabs[1]:
+                st.caption("这里列出进入模型的配方组成与工艺参数字段。高缺失字段仍可参与训练，但会降低推荐可信度。")
+                safe_dataframe(quality_report.get("input_features", pd.DataFrame()).head(120), use_container_width=True, height=320)
+            with q_tabs[2]:
+                safe_dataframe(quality_report.get("issues", pd.DataFrame()), use_container_width=True, height=220)
+        except Exception as e:
+            st.warning(f"字段映射与数据质量检查失败：{e}")
+            quality_report = None
+
     c_train, c_info = st.columns([1.0, 2.2], gap="large")
     with c_train:
         if st.button("训练 CatBoost 模型", use_container_width=True, key="real_ml_train_btn"):
             try:
-                with st.spinner("正在训练 CatBoost：Size / PDI / Zeta / EE / DL / flux 模型……"):
+                with st.spinner("正在训练 CatBoost，并进行 K 折交叉验证评价……"):
                     bundle = train_real_ml_models(df_main)
                 st.session_state.ml_training_bundle = bundle
                 st.session_state.ml_training_summary = bundle["summary"]
+                st.session_state.ml_quality_report = bundle.get("quality_report")
                 st.session_state.ml_recommendation_df = None
                 st.session_state.ml_pareto_df = None
                 st.success("CatBoost 模型训练完成。")
@@ -3742,16 +4190,16 @@ def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
     with c_info:
         st.markdown(
             """
-            **训练模型**：CatBoostRegressor，适合小样本、类别变量多、缺失较多的表格数据。  
-            **反向推荐**：不是直接训练“结果→配方”，而是用 CatBoost 正向模型 + Optuna 搜索候选配方。  
-            **多目标优化**：Pareto 前沿保留不同权衡方案，例如粒径更小、PDI 更低或 EE 更高的候选。
+            **训练模型**：CatBoostRegressor，适合类别变量多、小样本、缺失较多的文献型表格数据。  
+            **评价方式**：保留 holdout MAE/R²，同时新增 K 折交叉验证 MAE/R²，减少单次划分带来的偶然性。  
+            **推荐可信度**：推荐处方会与历史文献样本计算距离，给出适用域可信度与相似文献溯源。
             """
         )
 
     summary = st.session_state.get("ml_training_summary")
     if isinstance(summary, pd.DataFrame) and not summary.empty:
-        st.markdown("#### 模型评价指标")
-        safe_dataframe(summary, use_container_width=True, height=220)
+        st.markdown("#### ② CatBoost 交叉验证评价")
+        safe_dataframe(summary, use_container_width=True, height=260)
 
     bundle = st.session_state.get("ml_training_bundle")
     if isinstance(bundle, dict) and bundle.get("feature_importance"):
@@ -3763,11 +4211,27 @@ def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
                 if isinstance(fi_df, pd.DataFrame) and not fi_df.empty:
                     safe_dataframe(fi_df, use_container_width=True, height=320)
 
+    if isinstance(bundle, dict):
+        report_text = generate_model_training_report(
+            bundle,
+            st.session_state.get("ml_quality_report"),
+            st.session_state.get("ml_recommendation_df"),
+            st.session_state.get("ml_pareto_df"),
+        )
+        st.download_button(
+            "下载模型训练报告 Markdown",
+            data=report_text.encode("utf-8-sig"),
+            file_name="rhdl_catboost_optuna_training_report.md",
+            mime="text/markdown",
+            use_container_width=True,
+            key="download_ml_training_report_btn",
+        )
+
     if not isinstance(bundle, dict):
         st.info("请先点击“训练 CatBoost 模型”。")
         return
 
-    st.markdown("#### 优化目标设置")
+    st.markdown("#### ③ 优化目标设置")
     g1, g2, g3, g4, g5 = st.columns(5)
     with g1:
         target_size = st.number_input("粒径上限 nm", min_value=1.0, value=100.0, step=5.0, key="real_ml_target_size")
@@ -3791,10 +4255,10 @@ def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
     opt_tab, pareto_tab = st.tabs(["🔎 贝叶斯优化推荐", "🧬 多目标 Pareto 推荐"])
 
     with opt_tab:
-        st.caption("将 Size、PDI、EE、DL、flux 等目标压成综合评分，使用 Optuna TPE 寻找高分候选处方。")
+        st.caption("将 Size、PDI、EE、DL、flux 等目标压成综合评分，使用 Optuna TPE 寻找高分候选处方。推荐结果会自动增加可信度、适用域距离、相似文献样本和推荐理由。")
         if st.button("运行贝叶斯优化推荐", use_container_width=True, key="real_ml_bayesian_recommend_btn"):
             try:
-                with st.spinner("Optuna TPE 正在搜索候选处方……"):
+                with st.spinner("Optuna TPE 正在搜索候选处方，并评估适用域可信度……"):
                     rec_df = recommend_with_optuna_bayesian(
                         bundle,
                         target_size_max=target_size,
@@ -3811,15 +4275,15 @@ def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
 
         rec_df = st.session_state.get("ml_recommendation_df")
         if isinstance(rec_df, pd.DataFrame) and not rec_df.empty:
-            st.markdown("#### 贝叶斯优化推荐结果")
-            safe_dataframe(rec_df, use_container_width=True, height=420)
-            st.caption("说明：结果来自 CatBoost 正向预测 + Optuna TPE 贝叶斯优化。推荐结果用于实验设计参考，仍需真实实验验证。")
+            st.markdown("#### ④ 贝叶斯优化推荐结果：可信度 / 适用域 / 文献溯源")
+            safe_dataframe(rec_df, use_container_width=True, height=480)
+            st.caption("可信度来自推荐候选与历史训练样本的距离。可信度低代表外推风险较高，建议优先验证可信度高或中等的方案。")
 
     with pareto_tab:
-        st.caption("同时优化多个目标：最小化 Size、最小化 PDI、最大化 EE；可选最大化 DL 和 flux。输出 Pareto 前沿候选。")
+        st.caption("同时优化多个目标：最小化 Size、最小化 PDI、最大化 EE；可选最大化 DL 和 flux。输出 Pareto 前沿候选，并增加适用域可信度和推荐理由。")
         if st.button("运行 Pareto 多目标优化", use_container_width=True, key="real_ml_pareto_recommend_btn"):
             try:
-                with st.spinner("Optuna 正在搜索 Pareto 前沿候选处方……"):
+                with st.spinner("Optuna 正在搜索 Pareto 前沿候选处方，并评估适用域可信度……"):
                     pareto_df = recommend_with_optuna_pareto(
                         bundle,
                         target_size_max=target_size,
@@ -3836,12 +4300,27 @@ def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
 
         pareto_df = st.session_state.get("ml_pareto_df")
         if isinstance(pareto_df, pd.DataFrame) and not pareto_df.empty:
-            st.markdown("#### Pareto 多目标推荐结果")
-            safe_dataframe(pareto_df, use_container_width=True, height=420)
-            st.caption("说明：Pareto 结果代表不同目标之间的折中方案，不是单一唯一最优解。")
+            st.markdown("#### ④ Pareto 多目标推荐结果：可信度 / 适用域 / 文献溯源")
+            safe_dataframe(pareto_df, use_container_width=True, height=480)
+            st.caption("Pareto 结果代表不同目标之间的折中方案，不是单一唯一最优解。")
+
+    final_report_text = generate_model_training_report(
+        bundle,
+        st.session_state.get("ml_quality_report"),
+        st.session_state.get("ml_recommendation_df"),
+        st.session_state.get("ml_pareto_df"),
+    )
+    st.download_button(
+        "下载包含当前推荐结果的完整报告 Markdown",
+        data=final_report_text.encode("utf-8-sig"),
+        file_name="rhdl_catboost_optuna_full_report.md",
+        mime="text/markdown",
+        use_container_width=True,
+        key="download_ml_full_report_btn",
+    )
 
     if st.button("让 纳米制剂开发助手 解读当前推荐结果", use_container_width=True, key="real_ml_explain_recommendation_btn"):
-        queue_prompt("请解读当前 CatBoost + Optuna 反向推荐结果，说明排名靠前处方的共同特征、可能优势、Pareto 权衡关系和需要实验验证的风险点。")
+        queue_prompt("请解读当前 CatBoost + Optuna 反向推荐结果，说明排名靠前处方的共同特征、可信度、相似文献样本、Pareto 权衡关系和需要实验验证的风险点。")
 
 def render_knowledge_tab(df_main: Optional[pd.DataFrame]) -> None:
     c1, c2 = st.columns([1.0, 1.0])
