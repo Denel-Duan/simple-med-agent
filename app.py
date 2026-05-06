@@ -1245,6 +1245,86 @@ section[data-testid="stSidebar"] [role="radiogroup"] label:hover {{
 }}
 
 
+
+/* =========================
+   Alignment polish layer
+   Keep home-page modules in a strict 3-column grid and prevent button wrapping.
+   ========================= */
+.nav-panel {{
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+    margin: 0 0 20px 0 !important;
+}}
+.nav-panel .stButton > button {{
+    min-height: 46px !important;
+    padding: 0 14px !important;
+    border-radius: 999px !important;
+    font-size: 14px !important;
+    font-weight: 850 !important;
+    line-height: 1.15 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}}
+.nav-panel div[data-testid="column"] {{
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+}}
+.feature-grid-title {{
+    margin-top: 18px !important;
+}}
+.feature-card {{
+    height: 250px !important;
+    min-height: 250px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+}}
+.feature-icon {{
+    flex: 0 0 auto !important;
+}}
+.feature-title {{
+    min-height: 54px !important;
+    display: flex !important;
+    align-items: flex-start !important;
+}}
+.feature-desc {{
+    flex: 1 1 auto !important;
+}}
+.home-feature-button-wrap {{
+    margin: 12px 0 18px 0 !important;
+}}
+.home-feature-button-wrap + div .stButton > button,
+.stButton > button[kind="secondary"] {{
+    white-space: normal;
+}}
+.home-stat-card {{
+    height: 112px !important;
+    min-height: 112px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+}}
+.home-stat-label {{
+    min-height: 32px !important;
+    line-height: 1.35 !important;
+}}
+.home-stat-value {{
+    line-height: 1.05 !important;
+}}
+.home-section-title {{
+    font-size: 26px;
+    font-weight: 950;
+    color: var(--text);
+    margin: 26px 0 12px 0;
+}}
+.home-quick-row .stButton > button {{
+    min-height: 46px !important;
+    border-radius: 999px !important;
+    font-weight: 850 !important;
+}}
+
 </style>
 """,
         unsafe_allow_html=True,
@@ -3864,8 +3944,14 @@ def render_home_page(df_main: Optional[pd.DataFrame]) -> None:
     rows = [cards[:3], cards[3:]]
     idx = 0
     for row in rows:
-        cols = st.columns(len(row))
-        for col, (icon, title, desc, page) in zip(cols, row):
+        cols = st.columns(3, gap="large")
+        for col_idx, col in enumerate(cols):
+            if col_idx >= len(row):
+                with col:
+                    st.markdown("<div style='height: 286px;'></div>", unsafe_allow_html=True)
+                continue
+
+            icon, title, desc, page = row[col_idx]
             with col:
                 st.markdown(
                     f"""
@@ -3877,26 +3963,32 @@ def render_home_page(df_main: Optional[pd.DataFrame]) -> None:
                     """,
                     unsafe_allow_html=True,
                 )
+                st.markdown('<div class="home-feature-button-wrap">', unsafe_allow_html=True)
                 if st.button(f"进入{title}", use_container_width=True, key=f"home_feature_btn_{idx}"):
                     switch_page(page)
+                st.markdown('</div>', unsafe_allow_html=True)
             idx += 1
 
-    st.markdown("### 项目关键状态")
-    metric_cols = st.columns(6)
-    for col, (label, value) in zip(metric_cols, get_home_metrics(df_main)):
-        with col:
-            st.markdown(
-                f"""
-                <div class="home-stat-card">
-                    <div class="home-stat-label">{html.escape(str(label))}</div>
-                    <div class="home-stat-value">{html.escape(str(value))}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    st.markdown('<div class="home-section-title">项目关键状态</div>', unsafe_allow_html=True)
+    metrics = get_home_metrics(df_main)
+    metric_rows = [metrics[:3], metrics[3:6]]
+    for metric_row in metric_rows:
+        metric_cols = st.columns(3, gap="large")
+        for col, (label, value) in zip(metric_cols, metric_row):
+            with col:
+                st.markdown(
+                    f"""
+                    <div class="home-stat-card">
+                        <div class="home-stat-label">{html.escape(str(label))}</div>
+                        <div class="home-stat-value">{html.escape(str(value))}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
-    st.markdown("### 快速操作")
-    q1, q2, q3, q4 = st.columns(4)
+    st.markdown('<div class="home-section-title">快速操作</div>', unsafe_allow_html=True)
+    st.markdown('<div class="home-quick-row">', unsafe_allow_html=True)
+    q1, q2, q3, q4 = st.columns(4, gap="medium")
     if q1.button("沉淀原因分析", use_container_width=True, key="home_quick_precipitation"):
         queue_prompt("为什么我的rHDL体系会出现白色沉淀？请给出可能原因和排查顺序。")
     if q2.button("高包封率处方", use_container_width=True, key="home_quick_high_ee"):
@@ -3905,6 +3997,7 @@ def render_home_page(df_main: Optional[pd.DataFrame]) -> None:
         switch_page("文献解析中心")
     if q4.button("数据筛选分析", use_container_width=True, key="home_quick_data"):
         switch_page("数据分析工作台")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_literature_page(df_main: Optional[pd.DataFrame]) -> None:
@@ -4119,12 +4212,12 @@ def render_page_navigation() -> str:
         "数据分析工作台",
     ]
     page_labels = {
-        "首页概览": "首页概览",
+        "首页概览": "首页",
         "文献解析中心": "文献解析",
         "rHDL纳米制剂处方设计": "处方设计",
         "rHDL纳米制剂处方预测": "处方预测",
-        "实验小助手": "实验小助手",
-        "数据分析工作台": "数据工作台",
+        "实验小助手": "实验助手",
+        "数据分析工作台": "数据工作",
     }
 
     if st.session_state.get("active_page") not in pages:
