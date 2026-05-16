@@ -16,6 +16,13 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 try:
+    import joblib
+    JOBLIB_AVAILABLE = True
+except Exception:
+    joblib = None
+    JOBLIB_AVAILABLE = False
+
+try:
     from sklearn.metrics import r2_score, mean_absolute_error
     from sklearn.model_selection import train_test_split
     SKLEARN_AVAILABLE = True
@@ -66,6 +73,8 @@ MODEL = get_secret("MODEL", "")
 
 # 按你的要求：下载密码直接写死在程序里。
 DOWNLOAD_PASSWORD = "2026"
+MODEL_DIR = "models"
+MODEL_BUNDLE_PATH = os.path.join(MODEL_DIR, "rhdl_model_bundle.pkl")
 
 client: Optional[OpenAI] = None
 if API_KEY and API_BASE and MODEL:
@@ -188,6 +197,12 @@ def init_session_state() -> None:
         "ml_training_bundle": None,
         "ml_training_summary": None,
         "ml_recommendation_df": None,
+        "ml_pareto_df": None,
+        "ml_quality_report": None,
+        "ml_model_source": "未训练",
+        "ml_bundle": None,
+        "ml_bundle_source": "none",
+        "model_load_attempted": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -3508,7 +3523,7 @@ def assess_applicability_domain(bundle: Dict[str, Any], candidate: pd.DataFrame,
     cand = prepare_candidates_for_catboost(bundle, candidate).iloc[0]
     numeric_cols = [c for c in bundle.get("numeric_cols", []) if c in X_base.columns]
     categorical_cols = [c for c in bundle.get("categorical_cols", []) if c in X_base.columns]
-    num_ranges = bundle.get("num_ranges", {})
+    num_ranges = _get_candidate_numeric_space(bundle)
 
     distances = []
     for idx, row in X_base.iterrows():
@@ -3550,7 +3565,13 @@ def assess_applicability_domain(bundle: Dict[str, Any], candidate: pd.DataFrame,
         confidence = "低"
 
     source_df = bundle.get("source_df")
-    similar_refs = [_historical_row_label(source_df, int(i)) for i, _d in best]
+    history_ref = bundle.get("history_ref", [])
+    similar_refs = []
+    for i, _d in best:
+        if isinstance(history_ref, list) and int(i) < len(history_ref):
+            similar_refs.append(str(history_ref[int(i)]))
+        else:
+            similar_refs.append(_historical_row_label(source_df, int(i)))
     return {
         "confidence": confidence,
         "distance": None if best_dist is None else round(float(best_dist), 4),
@@ -3823,10 +3844,20 @@ def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
         cat_values[col] = vals if vals else ["none"]
 
     summary_df = pd.DataFrame(summary_rows)
+    candidate_space = {
+        "numeric": num_ranges,
+        "categorical": cat_values,
+    }
+    history_ref = []
+    for idx in range(len(cleaned_source)):
+        history_ref.append(_historical_row_label(cleaned_source, idx))
 
     return {
         "algorithm": "CatBoostRegressor + Optuna + ApplicabilityDomain",
+        "model_version": "catboost_optuna_v1",
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "models": models,
+        "metrics": summary_df,
         "summary": summary_df,
         "quality_report": quality_report,
         "feature_importance": feature_importance,
@@ -3835,11 +3866,108 @@ def train_real_ml_models(df: pd.DataFrame) -> Dict[str, Any]:
         "categorical_cols": categorical_cols,
         "target_sources": target_sources,
         "target_ranges": target_ranges,
+        "candidate_space": candidate_space,
+        "history_X": X_candidate_base,
+        "history_ref": history_ref,
         "X_base": X_candidate_base,
         "source_df": cleaned_source,
         "num_ranges": num_ranges,
         "cat_values": cat_values,
     }
+
+
+def _set_active_ml_bundle(bundle: Optional[Dict[str, Any]], source: str) -> None:
+    """同步新旧 session 键，避免页面局部仍引用旧字段。"""
+    st.session_state.ml_bundle = bundle
+    st.session_state.ml_bundle_source = source
+    st.session_state.ml_training_bundle = bundle
+    st.session_state.ml_training_summary = bundle.get("summary") if isinstance(bundle, dict) else None
+    st.session_state.ml_quality_report = bundle.get("quality_report") if isinstance(bundle, dict) else None
+    if source == "trained_and_saved":
+        st.session_state.ml_model_source = "已保存并加载模型"
+    elif source == "local_file":
+        st.session_state.ml_model_source = "已加载本地模型"
+    elif source == "session":
+        st.session_state.ml_model_source = "当前会话模型"
+    else:
+        st.session_state.ml_model_source = "未训练"
+
+
+def save_model_bundle(bundle: Dict[str, Any]) -> None:
+    """保存训练好的模型 bundle，便于后续直接加载推荐。"""
+    if not JOBLIB_AVAILABLE:
+        raise RuntimeError("当前环境未安装 joblib，无法保存模型 bundle。")
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    joblib.dump(bundle, MODEL_BUNDLE_PATH)
+
+
+def load_model_bundle() -> Optional[Dict[str, Any]]:
+    """读取本地模型 bundle。兼容直接保存 bundle 或保存 payload 两种形式。"""
+    if not JOBLIB_AVAILABLE:
+        st.warning("当前环境未安装 joblib，无法加载模型 bundle。")
+        return None
+    if not os.path.exists(MODEL_BUNDLE_PATH):
+        return None
+    try:
+        loaded = joblib.load(MODEL_BUNDLE_PATH)
+        if isinstance(loaded, dict) and "bundle" in loaded and isinstance(loaded["bundle"], dict):
+            bundle = loaded["bundle"]
+            bundle.setdefault("created_at", loaded.get("saved_at"))
+        elif isinstance(loaded, dict):
+            bundle = loaded
+        else:
+            st.warning("模型文件格式不正确，已忽略。")
+            return None
+        bundle["loaded_from"] = MODEL_BUNDLE_PATH
+        return bundle
+    except Exception as e:
+        st.warning(f"模型加载失败：{e}")
+        return None
+
+
+def delete_model_bundle() -> bool:
+    if os.path.exists(MODEL_BUNDLE_PATH):
+        os.remove(MODEL_BUNDLE_PATH)
+        return True
+    return False
+
+
+def ensure_model_loaded() -> None:
+    """平台启动时自动加载一次本地模型，避免用户每次重训。"""
+    if st.session_state.get("model_load_attempted"):
+        return
+    st.session_state.model_load_attempted = True
+    if isinstance(st.session_state.get("ml_bundle"), dict):
+        return
+    if not os.path.exists(MODEL_BUNDLE_PATH):
+        _set_active_ml_bundle(None, "none")
+        return
+    bundle = load_model_bundle()
+    if isinstance(bundle, dict):
+        _set_active_ml_bundle(bundle, "local_file")
+    else:
+        _set_active_ml_bundle(None, "none")
+
+
+def try_autoload_saved_model() -> None:
+    ensure_model_loaded()
+
+
+def get_model_status() -> str:
+    bundle = st.session_state.get("ml_bundle") or st.session_state.get("ml_training_bundle")
+    if not isinstance(bundle, dict):
+        return "未训练"
+    source = st.session_state.get("ml_bundle_source", "none")
+    if source == "trained_and_saved":
+        return "已保存并加载模型"
+    if source == "local_file":
+        return "已加载本地模型"
+    return "当前会话模型"
+
+
+def get_model_status_label() -> str:
+    return get_model_status()
+
 
 def prepare_candidates_for_catboost(bundle: Dict[str, Any], candidates: pd.DataFrame) -> pd.DataFrame:
     """确保候选处方的列顺序、类型与 CatBoost 训练阶段一致。"""
@@ -3860,17 +3988,35 @@ def prepare_candidates_for_catboost(bundle: Dict[str, Any], candidates: pd.DataF
     return X
 
 
-def _suggest_candidate_from_trial(trial: Any, bundle: Dict[str, Any]) -> pd.DataFrame:
+def _get_candidate_numeric_space(bundle: Dict[str, Any]) -> Dict[str, Tuple[float, float]]:
+    space = bundle.get("candidate_space", {})
+    if isinstance(space, dict) and isinstance(space.get("numeric"), dict):
+        return space.get("numeric", {})
+    return bundle.get("num_ranges", {})
+
+
+def _get_candidate_categorical_space(bundle: Dict[str, Any]) -> Dict[str, List[str]]:
+    space = bundle.get("candidate_space", {})
+    if isinstance(space, dict) and isinstance(space.get("categorical"), dict):
+        return space.get("categorical", {})
+    return bundle.get("cat_values", {})
+
+
+def _suggest_candidate_from_trial(trial: Any, bundle: Dict[str, Any], constraints: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
     """由 Optuna trial 生成单个候选处方。"""
     row: Dict[str, Any] = {}
     feature_cols: List[str] = bundle["feature_cols"]
     numeric_cols: List[str] = bundle["numeric_cols"]
     categorical_cols: List[str] = bundle["categorical_cols"]
-    num_ranges: Dict[str, Tuple[float, float]] = bundle["num_ranges"]
-    cat_values: Dict[str, List[str]] = bundle["cat_values"]
+    num_ranges: Dict[str, Tuple[float, float]] = _get_candidate_numeric_space(bundle)
+    cat_values: Dict[str, List[str]] = _get_candidate_categorical_space(bundle)
+    constraints = constraints or {}
 
     for col in feature_cols:
         safe_name = re.sub(r"[^A-Za-z0-9_]+", "_", str(col))[:80]
+        if col in constraints and constraints[col] not in [None, "", "全部", "不限"]:
+            row[col] = constraints[col]
+            continue
         if col in numeric_cols:
             lo, hi = num_ranges.get(col, (0.0, 0.0))
             if not pd.notna(lo):
@@ -3967,6 +4113,7 @@ def recommend_with_optuna_bayesian(
     target_flux_min: Optional[float] = None,
     top_n: int = 8,
     n_trials: int = 250,
+    constraints: Optional[Dict[str, Any]] = None,
 ) -> pd.DataFrame:
     """Optuna TPE 贝叶斯优化：将多指标压成综合评分，返回 Top N。"""
     if not OPTUNA_AVAILABLE:
@@ -3982,7 +4129,7 @@ def recommend_with_optuna_bayesian(
     records: List[Dict[str, Any]] = []
 
     def objective(trial):
-        cand = _suggest_candidate_from_trial(trial, bundle)
+        cand = _suggest_candidate_from_trial(trial, bundle, constraints=constraints)
         preds = _catboost_predict(bundle, cand)
         score = _score_predictions(
             preds,
@@ -4042,6 +4189,7 @@ def recommend_with_optuna_pareto(
     target_flux_min: Optional[float] = None,
     top_n: int = 8,
     n_trials: int = 250,
+    constraints: Optional[Dict[str, Any]] = None,
 ) -> pd.DataFrame:
     """Optuna 多目标 Pareto 优化。"""
     if not OPTUNA_AVAILABLE:
@@ -4073,7 +4221,7 @@ def recommend_with_optuna_pareto(
     directions = [d for _, d in objectives]
 
     def objective(trial):
-        cand = _suggest_candidate_from_trial(trial, bundle)
+        cand = _suggest_candidate_from_trial(trial, bundle, constraints=constraints)
         preds = _catboost_predict(bundle, cand)
         score = _score_predictions(
             preds,
@@ -4132,14 +4280,56 @@ def recommend_with_optuna_pareto(
     return _format_recommendation_table(out)
 
 
+def run_bayesian_recommendation(
+    bundle: Dict[str, Any],
+    targets: Dict[str, Optional[float]],
+    constraints: Optional[Dict[str, Any]],
+    n_trials: int,
+    top_n: int,
+) -> pd.DataFrame:
+    """使用已训练 bundle 运行贝叶斯反向推荐，不重新训练模型。"""
+    return recommend_with_optuna_bayesian(
+        bundle,
+        target_size_max=targets.get("Size_Mean_nm"),
+        target_pdi_max=targets.get("PDI"),
+        target_ee_min=targets.get("EE_Percent"),
+        target_dl_min=targets.get("DL_Percent"),
+        target_flux_min=targets.get("flux"),
+        top_n=top_n,
+        n_trials=n_trials,
+        constraints=constraints,
+    )
+
+
+def run_pareto_recommendation(
+    bundle: Dict[str, Any],
+    targets: Dict[str, Optional[float]],
+    constraints: Optional[Dict[str, Any]],
+    n_candidates: int,
+    top_n: int,
+) -> pd.DataFrame:
+    """使用已训练 bundle 运行 Pareto 推荐，不重新训练模型。"""
+    return recommend_with_optuna_pareto(
+        bundle,
+        target_size_max=targets.get("Size_Mean_nm"),
+        target_pdi_max=targets.get("PDI"),
+        target_ee_min=targets.get("EE_Percent"),
+        target_dl_min=targets.get("DL_Percent"),
+        target_flux_min=targets.get("flux"),
+        top_n=top_n,
+        n_trials=n_candidates,
+        constraints=constraints,
+    )
+
+
 def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
     st.markdown("---")
     st.markdown("### CatBoost + Optuna 真实机器学习反向推荐")
     st.caption("新增字段映射检查、数据质量检查、CatBoost交叉验证、适用域可信度、相似文献溯源和训练报告导出。")
 
-    if df_main is None or df_main.empty:
-        st.info("请先在左侧上传或加载 Excel 数据表。")
-        return
+    has_data = df_main is not None and not df_main.empty
+    if not has_data and not isinstance(st.session_state.get("ml_bundle"), dict):
+        st.info("请先在左侧上传或加载 Excel 数据表；如果已有本地模型，也可以点击“重新加载模型”后直接推荐。")
 
     missing_packages = []
     if not SKLEARN_AVAILABLE:
@@ -4148,44 +4338,83 @@ def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
         missing_packages.append("catboost")
     if not OPTUNA_AVAILABLE:
         missing_packages.append("optuna")
+    if not JOBLIB_AVAILABLE:
+        missing_packages.append("joblib")
     if missing_packages:
         st.error("当前环境缺少依赖：" + ", ".join(missing_packages) + "。请更新 requirements.txt 后重新部署。")
         st.code("streamlit\nopenai>=1.0\npython-dotenv\npandas\nplotly\nopenpyxl\nscikit-learn\njoblib\ncatboost\noptuna", language="text")
         return
 
-    with st.expander("① 字段映射与数据质量检查", expanded=True):
-        try:
-            quality_report = build_field_mapping_quality_report(df_main)
-            st.session_state.ml_quality_report = quality_report
-            q_tabs = st.tabs(["输出目标映射", "输入特征映射", "数据质量提示"])
-            with q_tabs[0]:
-                st.caption("系统会把 EE_1/EE_2、DL_1/DL_2 和多个 flux 字段按同类指标合并；输出Y缺失不填0，而是按目标分别训练。")
-                safe_dataframe(quality_report.get("target_mapping", pd.DataFrame()), use_container_width=True, height=240)
-            with q_tabs[1]:
-                st.caption("这里列出进入模型的配方组成与工艺参数字段。高缺失字段仍可参与训练，但会降低推荐可信度。")
-                safe_dataframe(quality_report.get("input_features", pd.DataFrame()).head(120), use_container_width=True, height=320)
-            with q_tabs[2]:
-                safe_dataframe(quality_report.get("issues", pd.DataFrame()), use_container_width=True, height=220)
-        except Exception as e:
-            st.warning(f"字段映射与数据质量检查失败：{e}")
-            quality_report = None
+    if has_data:
+        with st.expander("① 字段映射与数据质量检查", expanded=True):
+            try:
+                quality_report = build_field_mapping_quality_report(df_main)
+                st.session_state.ml_quality_report = quality_report
+                q_tabs = st.tabs(["输出目标映射", "输入特征映射", "数据质量提示"])
+                with q_tabs[0]:
+                    st.caption("系统会把 EE_1/EE_2、DL_1/DL_2 和多个 flux 字段按同类指标合并；输出Y缺失不填0，而是按目标分别训练。")
+                    safe_dataframe(quality_report.get("target_mapping", pd.DataFrame()), use_container_width=True, height=240)
+                with q_tabs[1]:
+                    st.caption("这里列出进入模型的配方组成与工艺参数字段。高缺失字段仍可参与训练，但会降低推荐可信度。")
+                    safe_dataframe(quality_report.get("input_features", pd.DataFrame()).head(120), use_container_width=True, height=320)
+                with q_tabs[2]:
+                    safe_dataframe(quality_report.get("issues", pd.DataFrame()), use_container_width=True, height=220)
+            except Exception as e:
+                st.warning(f"字段映射与数据质量检查失败：{e}")
+                quality_report = None
+    else:
+        st.info("当前未加载数据库，已跳过字段映射检查；已加载模型仍可用于推荐。")
 
-    c_train, c_info = st.columns([1.0, 2.2], gap="large")
+    bundle = st.session_state.get("ml_bundle") or st.session_state.get("ml_training_bundle")
+    status_label = get_model_status()
+    saved_exists = os.path.exists(MODEL_BUNDLE_PATH)
+    model_count = len(bundle.get("models", {})) if isinstance(bundle, dict) else 0
+    predict_targets = list(bundle.get("models", {}).keys()) if isinstance(bundle, dict) else []
+    model_version = bundle.get("model_version", "-") if isinstance(bundle, dict) else "-"
+    created_at = bundle.get("created_at", "-") if isinstance(bundle, dict) else "-"
+    st.markdown("#### 模型状态")
+    s1, s2, s3, s4 = st.columns(4)
+    s1.metric("当前模型状态", status_label)
+    s2.metric("已训练目标数量", model_count)
+    s3.metric("模型版本", model_version)
+    s4.metric("模型文件", "已存在" if saved_exists else "不存在")
+    st.caption(f"模型文件路径：{MODEL_BUNDLE_PATH}；创建时间：{created_at}；可预测目标：{', '.join(predict_targets) if predict_targets else '暂无'}")
+
+    c_train, c_model_ops, c_info = st.columns([1.0, 1.0, 2.0], gap="large")
     with c_train:
-        if st.button("训练 CatBoost 模型", use_container_width=True, key="real_ml_train_btn"):
+        if st.button("训练并保存 CatBoost 模型", use_container_width=True, key="real_ml_train_save_btn", disabled=not has_data):
             try:
                 with st.spinner("正在训练 CatBoost，并进行 K 折交叉验证评价……"):
                     bundle = train_real_ml_models(df_main)
-                st.session_state.ml_training_bundle = bundle
-                st.session_state.ml_training_summary = bundle["summary"]
-                st.session_state.ml_quality_report = bundle.get("quality_report")
+                    save_model_bundle(bundle)
+                _set_active_ml_bundle(bundle, "trained_and_saved")
                 st.session_state.ml_recommendation_df = None
                 st.session_state.ml_pareto_df = None
-                st.success("CatBoost 模型训练完成。")
+                st.success(f"CatBoost 模型训练完成，并已保存到 {MODEL_BUNDLE_PATH}。")
             except Exception as e:
-                st.session_state.ml_training_bundle = None
-                st.session_state.ml_training_summary = None
+                _set_active_ml_bundle(None, "none")
                 st.error(f"训练失败：{e}")
+
+    with c_model_ops:
+        if st.button("重新加载模型", use_container_width=True, key="real_ml_reload_bundle_btn"):
+            bundle = load_model_bundle()
+            if isinstance(bundle, dict):
+                _set_active_ml_bundle(bundle, "local_file")
+                st.session_state.ml_recommendation_df = None
+                st.session_state.ml_pareto_df = None
+                st.success("已重新加载本地模型。")
+            else:
+                st.warning("未能加载本地模型，请先训练并保存模型。")
+        if st.button("删除已保存模型", use_container_width=True, key="real_ml_delete_bundle_btn"):
+            try:
+                deleted = delete_model_bundle()
+                if st.session_state.get("ml_bundle_source") == "local_file":
+                    _set_active_ml_bundle(None, "none")
+                    st.success("已删除本地模型文件，并清空当前从本地加载的 session 模型。")
+                else:
+                    st.success("已删除本地模型文件；当前会话中的模型仍保留，可继续使用到本次会话结束。" if deleted else "本地模型文件不存在；当前会话模型未变。")
+            except Exception as e:
+                st.error(f"删除模型失败：{e}")
 
     with c_info:
         st.markdown(
@@ -4201,7 +4430,7 @@ def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
         st.markdown("#### ② CatBoost 交叉验证评价")
         safe_dataframe(summary, use_container_width=True, height=260)
 
-    bundle = st.session_state.get("ml_training_bundle")
+    bundle = st.session_state.get("ml_bundle") or st.session_state.get("ml_training_bundle")
     if isinstance(bundle, dict) and bundle.get("feature_importance"):
         with st.expander("查看 CatBoost 特征重要性", expanded=False):
             targets = list(bundle["feature_importance"].keys())
@@ -4227,45 +4456,70 @@ def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
             key="download_ml_training_report_btn",
         )
 
-    if not isinstance(bundle, dict):
-        st.info("请先点击“训练 CatBoost 模型”。")
-        return
-
     st.markdown("#### ③ 优化目标设置")
-    g1, g2, g3, g4, g5 = st.columns(5)
+    st.caption("目标输入区始终可见；没有训练或加载模型时，下方推荐按钮会保持禁用。")
+    g1, g2, g3 = st.columns(3)
     with g1:
         target_size = st.number_input("粒径上限 nm", min_value=1.0, value=100.0, step=5.0, key="real_ml_target_size")
     with g2:
         target_pdi = st.number_input("PDI 上限", min_value=0.01, value=0.25, step=0.01, format="%.2f", key="real_ml_target_pdi")
     with g3:
         target_ee = st.number_input("EE 下限 %", min_value=0.0, value=80.0, step=5.0, key="real_ml_target_ee")
+
+    g4, g5, g6, g7 = st.columns(4)
     with g4:
-        top_n = st.slider("推荐数", 3, 20, 8, 1, key="real_ml_top_n")
+        target_dl = st.number_input("DL 下限 %", min_value=0.0, value=5.0, step=1.0, key="real_ml_target_dl")
     with g5:
+        target_flux = st.number_input("flux 下限", min_value=0.0, value=10.0, step=1.0, key="real_ml_target_flux")
+    with g6:
+        top_n = st.slider("推荐数", 3, 20, 8, 1, key="real_ml_top_n")
+    with g7:
         n_trials = st.slider("Optuna 试验次数", 50, 1000, 250, 50, key="real_ml_trials")
 
-    extra1, extra2 = st.columns(2)
-    with extra1:
-        use_dl = st.checkbox("加入 DL 下限约束", value=False, key="real_ml_use_dl")
-        target_dl = st.number_input("DL 下限 %", min_value=0.0, value=5.0, step=1.0, key="real_ml_target_dl", disabled=not use_dl)
-    with extra2:
-        use_flux = st.checkbox("加入 flux 下限约束", value=False, key="real_ml_use_flux")
-        target_flux = st.number_input("flux 下限", min_value=0.0, value=10.0, step=1.0, key="real_ml_target_flux", disabled=not use_flux)
+    g8, g9, g10 = st.columns(3)
+    with g8:
+        pareto_candidates = st.slider("Pareto 候选数量", 50, 1500, int(n_trials), 50, key="real_ml_pareto_candidates")
+    with g9:
+        use_dl = st.checkbox("启用 DL 目标", value=False, key="real_ml_use_dl")
+    with g10:
+        use_flux = st.checkbox("启用 flux 目标", value=False, key="real_ml_use_flux")
+
+    constraints: Dict[str, Any] = {}
+    cat_space = _get_candidate_categorical_space(bundle) if isinstance(bundle, dict) else {}
+    c_apo, c_method = st.columns(2)
+    with c_apo:
+        apo_options = ["不限"] + [str(v) for v in cat_space.get("apo_type", []) if str(v).strip()]
+        selected_apo = st.selectbox("可选 apo_type 约束", apo_options or ["不限"], key="real_ml_constraint_apo_type")
+        if selected_apo != "不限":
+            constraints["apo_type"] = selected_apo
+    with c_method:
+        method_options = ["不限"] + [str(v) for v in cat_space.get("method_assembly", []) if str(v).strip()]
+        selected_method = st.selectbox("可选 method_assembly 约束", method_options or ["不限"], key="real_ml_constraint_method_assembly")
+        if selected_method != "不限":
+            constraints["method_assembly"] = selected_method
+
+    has_bundle = isinstance(bundle, dict)
+    if not has_bundle:
+        st.info("请先训练并保存模型，或点击“重新加载模型”加载本地模型。目标可以先填写，模型可用后直接运行推荐。")
 
     opt_tab, pareto_tab = st.tabs(["🔎 贝叶斯优化推荐", "🧬 多目标 Pareto 推荐"])
 
     with opt_tab:
         st.caption("将 Size、PDI、EE、DL、flux 等目标压成综合评分，使用 Optuna TPE 寻找高分候选处方。推荐结果会自动增加可信度、适用域距离、相似文献样本和推荐理由。")
-        if st.button("运行贝叶斯优化推荐", use_container_width=True, key="real_ml_bayesian_recommend_btn"):
+        if st.button("运行贝叶斯优化推荐", use_container_width=True, key="real_ml_bayesian_recommend_btn", disabled=not has_bundle):
             try:
                 with st.spinner("Optuna TPE 正在搜索候选处方，并评估适用域可信度……"):
-                    rec_df = recommend_with_optuna_bayesian(
+                    targets = {
+                        "Size_Mean_nm": target_size,
+                        "PDI": target_pdi,
+                        "EE_Percent": target_ee,
+                        "DL_Percent": target_dl if use_dl else None,
+                        "flux": target_flux if use_flux else None,
+                    }
+                    rec_df = run_bayesian_recommendation(
                         bundle,
-                        target_size_max=target_size,
-                        target_pdi_max=target_pdi,
-                        target_ee_min=target_ee,
-                        target_dl_min=target_dl if use_dl else None,
-                        target_flux_min=target_flux if use_flux else None,
+                        targets=targets,
+                        constraints=constraints,
                         top_n=top_n,
                         n_trials=n_trials,
                     )
@@ -4281,18 +4535,22 @@ def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
 
     with pareto_tab:
         st.caption("同时优化多个目标：最小化 Size、最小化 PDI、最大化 EE；可选最大化 DL 和 flux。输出 Pareto 前沿候选，并增加适用域可信度和推荐理由。")
-        if st.button("运行 Pareto 多目标优化", use_container_width=True, key="real_ml_pareto_recommend_btn"):
+        if st.button("运行 Pareto 多目标优化", use_container_width=True, key="real_ml_pareto_recommend_btn", disabled=not has_bundle):
             try:
                 with st.spinner("Optuna 正在搜索 Pareto 前沿候选处方，并评估适用域可信度……"):
-                    pareto_df = recommend_with_optuna_pareto(
+                    targets = {
+                        "Size_Mean_nm": target_size,
+                        "PDI": target_pdi,
+                        "EE_Percent": target_ee,
+                        "DL_Percent": target_dl if use_dl else None,
+                        "flux": target_flux if use_flux else None,
+                    }
+                    pareto_df = run_pareto_recommendation(
                         bundle,
-                        target_size_max=target_size,
-                        target_pdi_max=target_pdi,
-                        target_ee_min=target_ee,
-                        target_dl_min=target_dl if use_dl else None,
-                        target_flux_min=target_flux if use_flux else None,
+                        targets=targets,
+                        constraints=constraints,
                         top_n=top_n,
-                        n_trials=n_trials,
+                        n_candidates=pareto_candidates,
                     )
                 st.session_state.ml_pareto_df = pareto_df
             except Exception as e:
@@ -4303,6 +4561,9 @@ def render_real_ml_recommender_panel(df_main: Optional[pd.DataFrame]) -> None:
             st.markdown("#### ④ Pareto 多目标推荐结果：可信度 / 适用域 / 文献溯源")
             safe_dataframe(pareto_df, use_container_width=True, height=480)
             st.caption("Pareto 结果代表不同目标之间的折中方案，不是单一唯一最优解。")
+
+    if not has_bundle:
+        return
 
     final_report_text = generate_model_training_report(
         bundle,
@@ -4546,6 +4807,132 @@ def render_formulation_design_page() -> None:
         render_real_ml_recommender_panel(get_active_df())
 
 
+def _candidate_defaults_from_bundle(bundle: Dict[str, Any]) -> Dict[str, Any]:
+    defaults: Dict[str, Any] = {}
+    X_base = bundle.get("history_X")
+    if not isinstance(X_base, pd.DataFrame):
+        X_base = bundle.get("X_base")
+    feature_cols = bundle.get("feature_cols", [])
+    numeric_cols = set(bundle.get("numeric_cols", []))
+    categorical_cols = set(bundle.get("categorical_cols", []))
+    cat_values = bundle.get("cat_values", {})
+
+    for col in feature_cols:
+        if col in numeric_cols:
+            value = 0.0
+            if isinstance(X_base, pd.DataFrame) and col in X_base.columns:
+                s = pd.to_numeric(X_base[col], errors="coerce")
+                if s.notna().any():
+                    value = float(s.median())
+            defaults[col] = value
+        elif col in categorical_cols:
+            values = cat_values.get(col, ["none"])
+            defaults[col] = str(values[0]) if values else "none"
+        else:
+            defaults[col] = "none"
+    return defaults
+
+
+def render_real_catboost_prediction_panel(df_main: Optional[pd.DataFrame]) -> None:
+    """使用已训练/已加载的 CatBoost bundle 对候选处方做正向预测。"""
+    bundle = st.session_state.get("ml_bundle") or st.session_state.get("ml_training_bundle")
+    if not isinstance(bundle, dict):
+        st.info("真实 CatBoost 预测需要先在“处方设计 → 真实ML反向推荐”中训练并保存模型，或重新加载本地模型。")
+        if st.button("尝试加载本地模型", use_container_width=True, key="predict_real_reload_bundle_btn"):
+            loaded = load_model_bundle()
+            if isinstance(loaded, dict):
+                _set_active_ml_bundle(loaded, "local_file")
+                st.success("已加载本地模型，请再次运行预测。")
+            else:
+                st.warning("未能加载本地模型。")
+        return
+
+    feature_cols: List[str] = bundle.get("feature_cols", [])
+    numeric_cols = set(bundle.get("numeric_cols", []))
+    categorical_cols = set(bundle.get("categorical_cols", []))
+    cat_values: Dict[str, List[str]] = bundle.get("cat_values", {})
+    if not feature_cols:
+        st.warning("当前模型 bundle 中没有可用特征字段。")
+        return
+
+    st.caption(f"当前模型状态：{get_model_status_label()}。可以只填写关键字段，未填写字段会使用训练数据的中位数或常见类别。")
+
+    preferred = [
+        "phos_1_type", "phos_1_ratio", "phos_2_type", "phos_2_ratio", "phos_3_type", "phos_3_ratio",
+        "chol_ratio", "apo_type", "apo_ratio", "cargo_1_type", "cargo_1_ratio",
+        "method_assembly", "ph_assembly", "temp_assembly", "temperature", "time_assembly", "time_min",
+    ]
+    default_fields = [c for c in preferred if c in feature_cols]
+    if not default_fields:
+        default_fields = feature_cols[: min(12, len(feature_cols))]
+
+    input_mode = st.radio(
+        "输入模式",
+        ["简化关键字段", "完整字段"],
+        horizontal=True,
+        key="predict_real_input_mode_radio",
+    )
+    selected_fields = feature_cols if input_mode == "完整字段" else st.multiselect(
+        "选择要手动填写的字段",
+        feature_cols,
+        default=default_fields,
+        key="predict_real_selected_fields",
+    )
+
+    defaults = _candidate_defaults_from_bundle(bundle)
+    candidate = defaults.copy()
+    cols = st.columns(3)
+    for idx, col in enumerate(selected_fields):
+        safe_name = re.sub(r"[^A-Za-z0-9_]+", "_", str(col))[:70]
+        with cols[idx % 3]:
+            if col in numeric_cols:
+                candidate[col] = st.number_input(
+                    str(col),
+                    value=float(defaults.get(col, 0.0)),
+                    step=0.1,
+                    key=f"predict_real_num_{idx}_{safe_name}",
+                )
+            elif col in categorical_cols:
+                options = [str(v) for v in cat_values.get(col, ["none"]) if str(v).strip()]
+                if not options:
+                    options = ["none"]
+                default_value = str(defaults.get(col, options[0]))
+                default_idx = options.index(default_value) if default_value in options else 0
+                candidate[col] = st.selectbox(
+                    str(col),
+                    options,
+                    index=default_idx,
+                    key=f"predict_real_cat_{idx}_{safe_name}",
+                )
+            else:
+                candidate[col] = st.text_input(
+                    str(col),
+                    value=str(defaults.get(col, "none")),
+                    key=f"predict_real_text_{idx}_{safe_name}",
+                )
+
+    if st.button("运行真实 CatBoost 正向预测", use_container_width=True, key="predict_real_run_btn"):
+        cand_df = pd.DataFrame([candidate])
+        try:
+            preds = _catboost_predict(bundle, cand_df)
+            if not preds:
+                st.warning("模型未返回有效预测结果。")
+                return
+            pred_table = pd.DataFrame([{"指标": k, "预测值": round(float(v), 4)} for k, v in preds.items()])
+            safe_dataframe(pred_table, use_container_width=True, height=220)
+
+            ad = assess_applicability_domain(bundle, cand_df, k=3)
+            c1, c2 = st.columns(2)
+            c1.metric("适用域可信度", ad.get("confidence", "未知"))
+            c2.metric("适用域距离", ad.get("distance", ""))
+            refs = ad.get("similar_refs", []) or []
+            if refs:
+                st.markdown("#### 相似历史样本")
+                safe_dataframe(pd.DataFrame({"相似样本": refs}), use_container_width=True, height=150)
+        except Exception as e:
+            st.error(f"真实 CatBoost 预测失败：{e}")
+
+
 def render_formulation_prediction_page(df_main: Optional[pd.DataFrame]) -> None:
     """处方预测：输入参数，输出理化参数预测结果。"""
     render_module_header(
@@ -4553,62 +4940,67 @@ def render_formulation_prediction_page(df_main: Optional[pd.DataFrame]) -> None:
         "输入候选处方/工艺参数，预测包封率、粒径和PDI，并可与数据库样本进行对照。",
     )
 
-    c1, c2 = st.columns([1.1, 1.0], gap="large")
-    with c1:
-        with st.container(border=True):
-            st.markdown("#### 参数输入")
-            lipid_ratio = st.slider("脂质比例 lipid_ratio", 1.0, 8.0, 4.5, 0.1, key="predict_lipid_ratio_slider")
-            protein_ratio = st.slider("蛋白比例 protein_ratio", 0.4, 2.5, 1.2, 0.1, key="predict_protein_ratio_slider")
-            temperature = st.slider("温度 temperature", 20.0, 45.0, 37.0, 0.5, key="predict_temperature_slider")
-            time_min = st.slider("时间 time_min", 5.0, 40.0, 20.0, 1.0, key="predict_time_slider")
-            pred = predict_formulation_impl(lipid_ratio, protein_ratio, temperature, time_min)
+    pred_tabs = st.tabs(["🧪 Demo预测", "🤖 真实CatBoost预测"])
+    with pred_tabs[1]:
+        render_real_catboost_prediction_panel(df_main)
+    with pred_tabs[0]:
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("预测包封率(%)", pred["预测包封率(%)"])
-        m2.metric("预测粒径(nm)", pred["预测粒径(nm)"])
-        m3.metric("预测PDI", pred["预测PDI"])
+        c1, c2 = st.columns([1.1, 1.0], gap="large")
+        with c1:
+            with st.container(border=True):
+                st.markdown("#### 参数输入")
+                lipid_ratio = st.slider("脂质比例 lipid_ratio", 1.0, 8.0, 4.5, 0.1, key="predict_lipid_ratio_slider")
+                protein_ratio = st.slider("蛋白比例 protein_ratio", 0.4, 2.5, 1.2, 0.1, key="predict_protein_ratio_slider")
+                temperature = st.slider("温度 temperature", 20.0, 45.0, 37.0, 0.5, key="predict_temperature_slider")
+                time_min = st.slider("时间 time_min", 5.0, 40.0, 20.0, 1.0, key="predict_time_slider")
+                pred = predict_formulation_impl(lipid_ratio, protein_ratio, temperature, time_min)
 
-        if st.button("让 纳米制剂开发助手 解释预测结果", use_container_width=True, key="predict_explain_btn"):
-            queue_prompt(
-                f"请解释这组处方预测结果，并提出优化建议：lipid_ratio={lipid_ratio}, protein_ratio={protein_ratio}, temperature={temperature}, time_min={time_min}。"
+            m1, m2, m3 = st.columns(3)
+            m1.metric("预测包封率(%)", pred["预测包封率(%)"])
+            m2.metric("预测粒径(nm)", pred["预测粒径(nm)"])
+            m3.metric("预测PDI", pred["预测PDI"])
+
+            if st.button("让 纳米制剂开发助手 解释预测结果", use_container_width=True, key="predict_explain_btn"):
+                queue_prompt(
+                    f"请解释这组处方预测结果，并提出优化建议：lipid_ratio={lipid_ratio}, protein_ratio={protein_ratio}, temperature={temperature}, time_min={time_min}。"
+                )
+
+        with c2:
+            result_df = pd.DataFrame(
+                [
+                    {"指标": "预测包封率(%)", "数值": pred["预测包封率(%)"]},
+                    {"指标": "预测粒径(nm)", "数值": pred["预测粒径(nm)"]},
+                    {"指标": "预测PDI", "数值": pred["预测PDI"]},
+                ]
             )
+            fig = px.bar(result_df, x="指标", y="数值", title="当前处方预测输出")
+            st.plotly_chart(style_plotly(fig), use_container_width=True)
 
-    with c2:
-        result_df = pd.DataFrame(
-            [
-                {"指标": "预测包封率(%)", "数值": pred["预测包封率(%)"]},
-                {"指标": "预测粒径(nm)", "数值": pred["预测粒径(nm)"]},
-                {"指标": "预测PDI", "数值": pred["预测PDI"]},
-            ]
-        )
-        fig = px.bar(result_df, x="指标", y="数值", title="当前处方预测输出")
-        st.plotly_chart(style_plotly(fig), use_container_width=True)
+            st.markdown("#### 当前参数快照")
+            snapshot = pd.DataFrame(
+                [
+                    {
+                        "脂质比例": lipid_ratio,
+                        "蛋白比例": protein_ratio,
+                        "温度": temperature,
+                        "时间(min)": time_min,
+                        "预测包封率(%)": pred["预测包封率(%)"],
+                        "预测粒径(nm)": pred["预测粒径(nm)"],
+                        "预测PDI": pred["预测PDI"],
+                    }
+                ]
+            )
+            safe_dataframe(snapshot, use_container_width=True, height=140)
 
-        st.markdown("#### 当前参数快照")
-        snapshot = pd.DataFrame(
-            [
-                {
-                    "脂质比例": lipid_ratio,
-                    "蛋白比例": protein_ratio,
-                    "温度": temperature,
-                    "时间(min)": time_min,
-                    "预测包封率(%)": pred["预测包封率(%)"],
-                    "预测粒径(nm)": pred["预测粒径(nm)"],
-                    "预测PDI": pred["预测PDI"],
-                }
-            ]
-        )
-        safe_dataframe(snapshot, use_container_width=True, height=140)
-
-    if df_main is not None and not df_main.empty:
-        st.markdown("#### 数据库相似样本参考")
-        available_cols = [c for c in ["formulation_name", "phos_1_type", "apo_type", "method_assembly", "Size_Mean_nm", "PDI", "EE_Percent"] if c in df_main.columns]
-        if available_cols:
-            work = df_main[available_cols].copy()
-            if "Size_Mean_nm" in work.columns:
-                work["与预测粒径差值"] = (pd.to_numeric(work["Size_Mean_nm"], errors="coerce") - pred["预测粒径(nm)"]).abs()
-                work = work.sort_values("与预测粒径差值", na_position="last").head(12)
-            safe_dataframe(work, use_container_width=True, height=320)
+        if df_main is not None and not df_main.empty:
+            st.markdown("#### 数据库相似样本参考")
+            available_cols = [c for c in ["formulation_name", "phos_1_type", "apo_type", "method_assembly", "Size_Mean_nm", "PDI", "EE_Percent"] if c in df_main.columns]
+            if available_cols:
+                work = df_main[available_cols].copy()
+                if "Size_Mean_nm" in work.columns:
+                    work["与预测粒径差值"] = (pd.to_numeric(work["Size_Mean_nm"], errors="coerce") - pred["预测粒径(nm)"]).abs()
+                    work = work.sort_values("与预测粒径差值", na_position="last").head(12)
+                safe_dataframe(work, use_container_width=True, height=320)
 
 
 def render_lab_assistant_page(df_main: Optional[pd.DataFrame]) -> None:
@@ -4865,6 +5257,7 @@ def render_chat_panel() -> None:
 # =========================
 def main() -> None:
     init_session_state()
+    try_autoload_saved_model()
     apply_theme_css(st.session_state.theme_mode)
     render_sidebar()
     df_main, _ = load_active_database()
