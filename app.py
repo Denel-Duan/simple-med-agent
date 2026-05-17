@@ -3658,7 +3658,7 @@ def render_landing_page_component_backup() -> None:
         <section class="hero">
           <div>
             <div class="eyebrow"><span class="pulse"></span> AI + Nanomedicine Formulation Intelligence</div>
-            <h1><span class="grad-text">下一代 AI 纳米制剂研发平台</span></h1>
+            <h1><span class="grad-text">AI 纳米制剂研发平台</span></h1>
             <p class="subtitle">面向 rHDL / 纳米递送 / 文献知识库 / 机器学习反向处方设计的智能科研工作台。</p>
             <p class="caption">将文献解析、公共知识库、CatBoost 正向预测、Optuna 与 Pareto 多目标搜索、实验问题诊断串联成可复用的研发闭环。</p>
             <div class="hero-actions">
