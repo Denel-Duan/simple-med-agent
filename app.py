@@ -2668,10 +2668,12 @@ def render_landing_page() -> None:
             min-height: 100vh;
             padding: 28px min(5vw, 76px) 70px;
             background:
-                radial-gradient(circle at 12% 8%, rgba(37,99,235,0.22), transparent 29%),
-                radial-gradient(circle at 86% 14%, rgba(20,184,166,0.22), transparent 27%),
-                radial-gradient(circle at 66% 54%, rgba(124,58,237,0.12), transparent 30%),
-                linear-gradient(135deg, #f7fbff 0%, #eaf7ff 42%, #f4fbf7 100%);
+                radial-gradient(circle at 9% 9%, rgba(37,99,235,0.42), transparent 31%),
+                radial-gradient(circle at 82% 10%, rgba(6,182,212,0.36), transparent 27%),
+                radial-gradient(circle at 76% 54%, rgba(124,58,237,0.28), transparent 31%),
+                radial-gradient(circle at 18% 72%, rgba(251,146,60,0.20), transparent 25%),
+                radial-gradient(circle at 45% 92%, rgba(20,184,166,0.18), transparent 30%),
+                linear-gradient(135deg, #f3f7ff 0%, #dbeafe 28%, #e0f2fe 48%, #ecfdf5 70%, #f3e8ff 100%);
             animation: landingDrift 12s ease-in-out infinite alternate;
             color: #0b2740;
         }
@@ -2730,9 +2732,9 @@ def render_landing_page() -> None:
             align-items: center;
             padding: 8px 12px;
             border-radius: 999px;
-            background: rgba(255,255,255,0.62);
-            border: 1px solid rgba(37,99,235,0.16);
-            color: #155e75;
+            background: linear-gradient(135deg, rgba(255,255,255,0.74), rgba(224,242,254,0.68));
+            border: 1px solid rgba(14,165,233,0.22);
+            color: #134e7a;
             font-weight: 800;
             font-size: 13px;
             margin-bottom: 22px;
@@ -2770,7 +2772,7 @@ def render_landing_page() -> None:
             box-shadow: 0 18px 36px rgba(14,165,233,0.20);
         }
         .landing-cta-stack-wrap .stButton:nth-of-type(1) > button {
-            background: linear-gradient(135deg, #0ea5e9 0%, #14b8a6 100%) !important;
+            background: linear-gradient(135deg, #1d4ed8 0%, #7c3aed 42%, #06b6d4 72%, #14b8a6 100%) !important;
             color: #ffffff !important;
             border: none !important;
         }
@@ -2790,8 +2792,11 @@ def render_landing_page() -> None:
             min-height: 480px;
             border-radius: 38px;
             background:
-                linear-gradient(135deg, rgba(15,23,42,0.92), rgba(30,64,175,0.78)),
-                radial-gradient(circle at 30% 20%, rgba(34,211,238,0.34), transparent 30%);
+                radial-gradient(circle at 24% 18%, rgba(34,211,238,0.46), transparent 28%),
+                radial-gradient(circle at 78% 28%, rgba(167,139,250,0.42), transparent 26%),
+                radial-gradient(circle at 62% 80%, rgba(52,211,153,0.34), transparent 26%),
+                radial-gradient(circle at 16% 86%, rgba(251,191,36,0.22), transparent 24%),
+                linear-gradient(135deg, rgba(8,20,46,0.96), rgba(29,78,216,0.82), rgba(88,28,135,0.78));
             overflow: hidden;
             border: 1px solid rgba(255,255,255,0.26);
             box-shadow: 0 34px 80px rgba(15,55,87,0.24);
@@ -2840,7 +2845,7 @@ def render_landing_page() -> None:
             background: rgba(255,255,255,0.12);
             border: 1px solid rgba(255,255,255,0.22);
             backdrop-filter: blur(16px);
-            color: white;
+            color: #082f49;
         }
         .hero-panel-title {
             font-size: 18px;
@@ -2878,8 +2883,11 @@ def render_landing_page() -> None:
             min-height: 230px;
             padding: 28px;
             border-radius: 30px;
-            background: linear-gradient(160deg, rgba(255,255,255,0.74), rgba(239,246,255,0.82));
-            border: 1px solid rgba(37,99,235,0.14);
+            background:
+                radial-gradient(circle at 100% 0%, rgba(14,165,233,0.24), transparent 34%),
+                radial-gradient(circle at 0% 100%, rgba(124,58,237,0.12), transparent 32%),
+                linear-gradient(160deg, rgba(255,255,255,0.82), rgba(226,242,255,0.88));
+            border: 1px solid rgba(37,99,235,0.18);
             box-shadow: 0 24px 64px rgba(15,55,87,0.10);
         }
         .value-icon, .feature-icon-lg {
@@ -2910,10 +2918,12 @@ def render_landing_page() -> None:
             margin: 0 auto 86px;
         }
         .landing-card {
-            border: 1px solid rgba(14,165,233,0.18);
+            border: 1px solid rgba(37,99,235,0.16);
             background:
-                radial-gradient(circle at 90% 12%, rgba(34,211,238,0.16), transparent 30%),
-                rgba(255,255,255,0.76);
+                radial-gradient(circle at 88% 10%, rgba(34,211,238,0.20), transparent 28%),
+                radial-gradient(circle at 10% 92%, rgba(124,58,237,0.18), transparent 30%),
+                radial-gradient(circle at 92% 86%, rgba(251,146,60,0.10), transparent 24%),
+                linear-gradient(180deg, rgba(255,255,255,0.86), rgba(228,243,255,0.78));
             backdrop-filter: blur(18px);
             border-radius: 30px;
             padding: 28px;
@@ -2924,7 +2934,7 @@ def render_landing_page() -> None:
         }
         .landing-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 24px 60px rgba(14,165,233,0.16);
+            box-shadow: 0 26px 66px rgba(37,99,235,0.18), 0 10px 28px rgba(20,184,166,0.10);
         }
         .landing-card h3 {
             margin: 0 0 12px;
@@ -2973,11 +2983,11 @@ def render_landing_page() -> None:
             margin-top: 28px;
         }
         .workflow span {
-            border: 1px solid rgba(14,165,233,0.2);
+            border: 1px solid rgba(37,99,235,0.18);
             border-radius: 999px;
             padding: 13px 18px;
-            background: linear-gradient(135deg, rgba(255,255,255,0.78), rgba(224,242,254,0.72));
-            color: #25546d;
+            background: linear-gradient(135deg, rgba(255,255,255,0.82), rgba(219,234,254,0.74), rgba(204,251,241,0.58));
+            color: #1d4f72;
             font-weight: 750;
             box-shadow: 0 12px 26px rgba(15,55,87,0.06);
         }
@@ -2988,9 +2998,10 @@ def render_landing_page() -> None:
             text-align: center;
             border-radius: 36px;
             background:
-                radial-gradient(circle at 15% 20%, rgba(251,191,36,0.16), transparent 26%),
-                radial-gradient(circle at 86% 24%, rgba(124,58,237,0.16), transparent 30%),
-                linear-gradient(135deg, rgba(14,165,233,0.16), rgba(45,212,191,0.18));
+                radial-gradient(circle at 15% 20%, rgba(251,146,60,0.26), transparent 26%),
+                radial-gradient(circle at 86% 24%, rgba(124,58,237,0.26), transparent 30%),
+                radial-gradient(circle at 52% 100%, rgba(34,211,238,0.24), transparent 32%),
+                linear-gradient(135deg, rgba(37,99,235,0.22), rgba(45,212,191,0.24));
             border: 1px solid rgba(14,165,233,0.20);
             box-shadow: 0 26px 72px rgba(15,55,87,0.13);
         }
@@ -3074,7 +3085,6 @@ def render_landing_page() -> None:
         ("🧪", "rHDL 处方设计", "基于 CatBoost + Optuna 搜索候选处方与工艺。", "rHDL纳米制剂处方设计"),
         ("📈", "rHDL 处方预测", "Demo 与真实模型并行的正向理化参数预测。", "rHDL纳米制剂处方预测"),
         ("🩺", "实验小助手", "沉淀、粒径异常、PDI 偏高等问题辅助诊断。", "实验小助手"),
-        ("🗂️", "数据工作台", "文献数据库筛选、对比、排序和图表分析。", "数据分析工作台"),
         ("🤖", "模型中心", "模型训练、加载、报告导出与推荐可信度评估。", "rHDL纳米制剂处方设计"),
     ]
     st.markdown('<div class="landing-card-grid">', unsafe_allow_html=True)
@@ -3125,6 +3135,1200 @@ def render_landing_page() -> None:
             set_route("register")
             st.rerun()
         if st.button("游客体验 / 登录", use_container_width=True, key="landing_bottom_guest_login_btn"):
+            set_route("workspace")
+            st.rerun()
+
+
+def render_landing_page_component_backup() -> None:
+    """Unused iframe landing backup; native Streamlit buttons are more reliable."""
+    knowledge_stats = get_knowledge_stats()
+    usage_stats = get_usage_stats()
+    try:
+        data_files = [
+            p
+            for p in os.listdir(DATA_DIR)
+            if p.lower().endswith((".xlsx", ".xls", ".csv"))
+        ] if os.path.isdir(DATA_DIR) else []
+    except Exception:
+        data_files = []
+
+    model_count = 1 if os.path.exists(MODEL_BUNDLE_PATH) else 0
+    literature_count = max(len(data_files), 1 if st.session_state.get("active_df") is not None else 0)
+    public_knowledge = knowledge_stats.get("approved", "--")
+    today_visits = usage_stats.get("today_visits", "--")
+    unique_sessions = usage_stats.get("unique_sessions", "--")
+
+    landing_html = f"""
+    <!doctype html>
+    <html lang="zh-CN">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <style>
+        :root {{
+          --bg0: #030712;
+          --ink: #f8fbff;
+          --muted: rgba(226, 239, 255, .72);
+          --line: rgba(255,255,255,.14);
+          --cyan: #22d3ee;
+          --teal: #2dd4bf;
+          --violet: #8b5cf6;
+          --pink: #f472b6;
+          --amber: #fbbf24;
+        }}
+        * {{ box-sizing: border-box; }}
+        html {{ scroll-behavior: smooth; }}
+        body {{
+          margin: 0;
+          color: var(--ink);
+          background:
+            radial-gradient(circle at 12% 4%, rgba(34,211,238,.28), transparent 28%),
+            radial-gradient(circle at 88% 8%, rgba(139,92,246,.32), transparent 30%),
+            radial-gradient(circle at 70% 52%, rgba(244,114,182,.16), transparent 28%),
+            radial-gradient(circle at 18% 78%, rgba(45,212,191,.20), transparent 30%),
+            linear-gradient(135deg, #020617 0%, #061221 34%, #0a1025 62%, #020617 100%);
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          overflow-x: hidden;
+        }}
+        body:before {{
+          content: "";
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          background-image:
+            linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+          background-size: 44px 44px;
+          mask-image: radial-gradient(circle at 50% 20%, black, transparent 72%);
+        }}
+        .orb {{
+          position: fixed;
+          width: 360px;
+          height: 360px;
+          border-radius: 999px;
+          filter: blur(42px);
+          opacity: .36;
+          pointer-events: none;
+          animation: float 12s ease-in-out infinite alternate;
+        }}
+        .orb.one {{ left: -90px; top: 120px; background: #22d3ee; }}
+        .orb.two {{ right: -110px; top: 360px; background: #8b5cf6; animation-delay: -4s; }}
+        .orb.three {{ left: 42%; bottom: 80px; background: #2dd4bf; animation-delay: -8s; }}
+        @keyframes float {{
+          from {{ transform: translate3d(0, 0, 0) scale(1); }}
+          to {{ transform: translate3d(28px, -32px, 0) scale(1.08); }}
+        }}
+        .page {{
+          position: relative;
+          max-width: 1240px;
+          margin: 0 auto;
+          padding: 28px 24px 84px;
+        }}
+        .nav {{
+          position: sticky;
+          top: 14px;
+          z-index: 20;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          padding: 12px 14px 12px 18px;
+          border: 1px solid var(--line);
+          border-radius: 24px;
+          background: rgba(5, 12, 26, .66);
+          backdrop-filter: blur(22px);
+          box-shadow: 0 18px 60px rgba(0,0,0,.28);
+        }}
+        .brand {{
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-weight: 850;
+          letter-spacing: 0;
+          white-space: nowrap;
+        }}
+        .brand-mark {{
+          width: 34px;
+          height: 34px;
+          border-radius: 12px;
+          background: conic-gradient(from 180deg, var(--cyan), var(--violet), var(--pink), var(--teal), var(--cyan));
+          box-shadow: 0 0 28px rgba(34,211,238,.44);
+        }}
+        .nav-links {{
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }}
+        .nav-links a {{
+          color: rgba(240,247,255,.78);
+          text-decoration: none;
+          font-size: 14px;
+          padding: 9px 12px;
+          border-radius: 999px;
+          transition: background .2s ease, color .2s ease;
+        }}
+        .nav-links a:hover {{ background: rgba(255,255,255,.08); color: white; }}
+        .hero {{
+          min-height: 760px;
+          display: grid;
+          grid-template-columns: minmax(0, 1.02fr) minmax(360px, .98fr);
+          gap: 54px;
+          align-items: center;
+          padding: 74px 0 58px;
+        }}
+        .eyebrow {{
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 9px 13px;
+          border: 1px solid rgba(34,211,238,.26);
+          border-radius: 999px;
+          color: #a5f3fc;
+          background: linear-gradient(135deg, rgba(34,211,238,.12), rgba(139,92,246,.12));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+          font-size: 13px;
+          font-weight: 760;
+        }}
+        .pulse {{
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+          background: var(--teal);
+          box-shadow: 0 0 0 0 rgba(45,212,191,.65);
+          animation: pulse 1.8s infinite;
+        }}
+        @keyframes pulse {{
+          70% {{ box-shadow: 0 0 0 13px rgba(45,212,191,0); }}
+          100% {{ box-shadow: 0 0 0 0 rgba(45,212,191,0); }}
+        }}
+        h1 {{
+          margin: 22px 0 18px;
+          font-size: clamp(50px, 7vw, 100px);
+          line-height: .98;
+          letter-spacing: 0;
+          max-width: 880px;
+        }}
+        .grad-text {{
+          background: linear-gradient(110deg, #ffffff 0%, #b8f7ff 24%, #a78bfa 54%, #f0abfc 76%, #fef3c7 100%);
+          -webkit-background-clip: text;
+          color: transparent;
+        }}
+        .subtitle {{
+          max-width: 760px;
+          color: var(--muted);
+          font-size: clamp(18px, 2.1vw, 25px);
+          line-height: 1.62;
+          margin: 0 0 18px;
+        }}
+        .caption {{
+          max-width: 690px;
+          color: rgba(226,239,255,.58);
+          font-size: 15px;
+          line-height: 1.78;
+        }}
+        .hero-actions, .cta-actions {{
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          flex-wrap: wrap;
+          margin-top: 34px;
+        }}
+        .btn {{
+          appearance: none;
+          border: 0;
+          cursor: pointer;
+          height: 52px;
+          padding: 0 22px;
+          border-radius: 16px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          color: white;
+          font-size: 15px;
+          font-weight: 820;
+          text-decoration: none;
+          transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
+          white-space: nowrap;
+        }}
+        .btn.primary {{
+          background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 48%, #ff4ecd 100%);
+          box-shadow: 0 16px 42px rgba(124,58,237,.42), 0 0 0 1px rgba(255,255,255,.14) inset;
+        }}
+        .btn.secondary {{
+          background: rgba(255,255,255,.08);
+          border: 1px solid rgba(255,255,255,.18);
+          color: rgba(248,251,255,.94);
+          backdrop-filter: blur(16px);
+        }}
+        .btn.ghost {{
+          background: transparent;
+          border: 1px solid rgba(34,211,238,.28);
+          color: #b8f7ff;
+        }}
+        .btn:hover {{
+          transform: translateY(-3px);
+          box-shadow: 0 22px 54px rgba(34,211,238,.22), 0 0 36px rgba(139,92,246,.22);
+        }}
+        .visual {{
+          position: relative;
+          min-height: 580px;
+          border-radius: 44px;
+          border: 1px solid rgba(255,255,255,.18);
+          background:
+            radial-gradient(circle at 50% 42%, rgba(34,211,238,.42), transparent 23%),
+            radial-gradient(circle at 72% 20%, rgba(244,114,182,.28), transparent 28%),
+            linear-gradient(150deg, rgba(15,23,42,.86), rgba(30,41,59,.48));
+          overflow: hidden;
+          box-shadow: 0 44px 120px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.12);
+        }}
+        .visual svg {{
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+        }}
+        .molecule {{
+          position: absolute;
+          inset: 70px;
+          border-radius: 50%;
+          border: 1px solid rgba(165,243,252,.26);
+          animation: spin 18s linear infinite;
+        }}
+        .molecule.two {{
+          inset: 120px 54px 92px 88px;
+          transform: rotate(28deg);
+          animation-duration: 24s;
+          border-color: rgba(196,181,253,.30);
+        }}
+        @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+        .node {{
+          position: absolute;
+          width: 15px;
+          height: 15px;
+          border-radius: 999px;
+          background: #67e8f9;
+          box-shadow: 0 0 26px rgba(103,232,249,.95);
+        }}
+        .n1 {{ left: 92px; top: 112px; }}
+        .n2 {{ right: 116px; top: 92px; background: #c084fc; }}
+        .n3 {{ left: 136px; bottom: 134px; background: #5eead4; }}
+        .n4 {{ right: 82px; bottom: 160px; background: #fbbf24; }}
+        .ai-card {{
+          position: absolute;
+          left: 34px;
+          right: 34px;
+          bottom: 32px;
+          padding: 22px;
+          border-radius: 26px;
+          background: rgba(2,6,23,.56);
+          border: 1px solid rgba(255,255,255,.18);
+          backdrop-filter: blur(22px);
+          box-shadow: 0 24px 70px rgba(0,0,0,.30);
+        }}
+        .ai-card-top {{
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+          align-items: center;
+          margin-bottom: 18px;
+        }}
+        .ai-card-title {{ font-size: 17px; font-weight: 850; }}
+        .score {{
+          padding: 8px 11px;
+          border-radius: 999px;
+          color: #022c22;
+          background: linear-gradient(135deg, #a7f3d0, #67e8f9);
+          font-size: 12px;
+          font-weight: 900;
+        }}
+        .bars {{ display: grid; gap: 11px; }}
+        .bar {{
+          height: 11px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #22d3ee, #8b5cf6, #f472b6);
+          box-shadow: 0 0 18px rgba(34,211,238,.24);
+        }}
+        .bar:nth-child(2) {{ width: 76%; opacity: .72; }}
+        .bar:nth-child(3) {{ width: 58%; opacity: .54; }}
+        .section {{ margin: 0 0 86px; }}
+        .section-head {{
+          max-width: 760px;
+          margin: 0 auto 28px;
+          text-align: center;
+        }}
+        .kicker {{
+          color: #67e8f9;
+          text-transform: uppercase;
+          letter-spacing: .13em;
+          font-size: 12px;
+          font-weight: 900;
+          margin-bottom: 12px;
+        }}
+        h2 {{
+          margin: 0;
+          font-size: clamp(32px, 4.5vw, 58px);
+          line-height: 1.08;
+        }}
+        .section-head p {{
+          margin: 16px auto 0;
+          color: var(--muted);
+          line-height: 1.72;
+          font-size: 16px;
+        }}
+        .feature-grid {{
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 18px;
+        }}
+        .feature {{
+          position: relative;
+          min-height: 250px;
+          padding: 24px;
+          border-radius: 28px;
+          border: 1px solid rgba(255,255,255,.14);
+          background:
+            linear-gradient(145deg, rgba(255,255,255,.11), rgba(255,255,255,.045)),
+            radial-gradient(circle at 90% 8%, rgba(34,211,238,.20), transparent 30%);
+          backdrop-filter: blur(18px);
+          box-shadow: 0 24px 80px rgba(0,0,0,.22);
+          overflow: hidden;
+          transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease;
+        }}
+        .feature:before {{
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(34,211,238,.8), rgba(139,92,246,.35), rgba(244,114,182,.5));
+          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          opacity: .35;
+          pointer-events: none;
+        }}
+        .feature:hover {{
+          transform: translateY(-7px);
+          border-color: rgba(103,232,249,.35);
+          box-shadow: 0 32px 100px rgba(34,211,238,.16), 0 22px 70px rgba(139,92,246,.15);
+        }}
+        .icon {{
+          width: 52px;
+          height: 52px;
+          border-radius: 18px;
+          display: grid;
+          place-items: center;
+          margin-bottom: 22px;
+          font-size: 24px;
+          background: linear-gradient(135deg, rgba(34,211,238,.22), rgba(139,92,246,.22));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 12px 34px rgba(34,211,238,.12);
+        }}
+        .feature h3 {{ margin: 0 0 10px; font-size: 21px; }}
+        .feature p {{
+          color: rgba(226,239,255,.66);
+          line-height: 1.7;
+          margin: 0;
+          font-size: 14.5px;
+        }}
+        .arch {{
+          padding: 34px;
+          border-radius: 34px;
+          background:
+            radial-gradient(circle at 16% 20%, rgba(251,191,36,.15), transparent 24%),
+            radial-gradient(circle at 88% 18%, rgba(34,211,238,.18), transparent 32%),
+            rgba(255,255,255,.065);
+          border: 1px solid rgba(255,255,255,.13);
+          backdrop-filter: blur(18px);
+        }}
+        .chips {{
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 13px;
+        }}
+        .chip {{
+          padding: 12px 16px;
+          border-radius: 999px;
+          color: rgba(248,251,255,.94);
+          border: 1px solid rgba(255,255,255,.14);
+          background: linear-gradient(135deg, rgba(34,211,238,.12), rgba(139,92,246,.13));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
+          font-weight: 760;
+          font-size: 14px;
+        }}
+        .dash {{
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 14px;
+        }}
+        .stat {{
+          padding: 22px;
+          min-height: 140px;
+          border-radius: 26px;
+          background: linear-gradient(145deg, rgba(255,255,255,.105), rgba(255,255,255,.04));
+          border: 1px solid rgba(255,255,255,.13);
+          box-shadow: 0 22px 68px rgba(0,0,0,.18);
+        }}
+        .stat strong {{
+          display: block;
+          font-size: clamp(28px, 3.5vw, 44px);
+          line-height: 1;
+          background: linear-gradient(135deg, #fff, #67e8f9, #c4b5fd);
+          -webkit-background-clip: text;
+          color: transparent;
+          margin-bottom: 12px;
+        }}
+        .stat span {{ color: rgba(226,239,255,.62); font-size: 13px; }}
+        .workflow {{
+          display: grid;
+          grid-template-columns: repeat(6, minmax(0, 1fr));
+          gap: 12px;
+        }}
+        .step {{
+          padding: 18px 14px;
+          min-height: 108px;
+          border-radius: 22px;
+          border: 1px solid rgba(255,255,255,.12);
+          background: rgba(255,255,255,.055);
+          text-align: center;
+          display: grid;
+          align-content: center;
+          gap: 8px;
+        }}
+        .step b {{ color: #a5f3fc; font-size: 19px; }}
+        .step span {{ color: rgba(226,239,255,.66); font-size: 13px; line-height: 1.45; }}
+        .cta {{
+          position: relative;
+          text-align: center;
+          padding: 58px 30px;
+          border-radius: 40px;
+          overflow: hidden;
+          border: 1px solid rgba(255,255,255,.16);
+          background:
+            radial-gradient(circle at 24% 12%, rgba(34,211,238,.30), transparent 26%),
+            radial-gradient(circle at 80% 20%, rgba(244,114,182,.25), transparent 28%),
+            linear-gradient(135deg, rgba(14,165,233,.14), rgba(124,58,237,.17));
+          box-shadow: 0 36px 110px rgba(0,0,0,.30);
+        }}
+        .cta h2 {{ max-width: 780px; margin: 0 auto; }}
+        .cta p {{
+          max-width: 680px;
+          margin: 18px auto 0;
+          color: var(--muted);
+          line-height: 1.72;
+        }}
+        .cta-actions {{ justify-content: center; }}
+        @media (max-width: 980px) {{
+          .hero {{ grid-template-columns: 1fr; min-height: auto; padding-top: 48px; }}
+          .visual {{ min-height: 460px; }}
+          .feature-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+          .dash {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+          .workflow {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
+        }}
+        @media (max-width: 640px) {{
+          .page {{ padding: 18px 14px 54px; }}
+          .nav {{ position: relative; top: 0; align-items: flex-start; flex-direction: column; }}
+          .nav-links {{ justify-content: flex-start; }}
+          .hero {{ gap: 28px; padding: 46px 0 44px; }}
+          h1 {{ font-size: clamp(42px, 14vw, 64px); }}
+          .hero-actions, .cta-actions {{ align-items: stretch; flex-direction: column; }}
+          .btn {{ width: 100%; }}
+          .visual {{ min-height: 390px; border-radius: 32px; }}
+          .feature-grid, .dash, .workflow {{ grid-template-columns: 1fr; }}
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="orb one"></div><div class="orb two"></div><div class="orb three"></div>
+      <main class="page">
+        <nav class="nav">
+          <div class="brand"><span class="brand-mark"></span><span>rHDL AI Research Platform</span></div>
+          <div class="nav-links">
+            <a href="#features">平台能力</a>
+            <a href="#architecture">技术架构</a>
+            <a href="#metrics">数据指标</a>
+            <a href="?route=login" target="_top">登录</a>
+            <a href="?route=register" target="_top">注册</a>
+          </div>
+        </nav>
+
+        <section class="hero">
+          <div>
+            <div class="eyebrow"><span class="pulse"></span> AI + Nanomedicine Formulation Intelligence</div>
+            <h1><span class="grad-text">下一代 AI 纳米制剂研发平台</span></h1>
+            <p class="subtitle">面向 rHDL / 纳米递送 / 文献知识库 / 机器学习反向处方设计的智能科研工作台。</p>
+            <p class="caption">将文献解析、公共知识库、CatBoost 正向预测、Optuna 与 Pareto 多目标搜索、实验问题诊断串联成可复用的研发闭环。</p>
+            <div class="hero-actions">
+              <a class="btn primary" href="?route=workspace" target="_top">进入工作台 <span>↗</span></a>
+              <a class="btn secondary" href="?route=register" target="_top">注册账号</a>
+              <a class="btn ghost" href="?route=login" target="_top">登录</a>
+            </div>
+          </div>
+          <div class="visual" aria-label="AI科研平台视觉图">
+            <svg viewBox="0 0 620 620" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="line" x1="0" x2="1">
+                  <stop offset="0" stop-color="#22d3ee" stop-opacity=".18"/>
+                  <stop offset=".55" stop-color="#a78bfa" stop-opacity=".38"/>
+                  <stop offset="1" stop-color="#f472b6" stop-opacity=".18"/>
+                </linearGradient>
+              </defs>
+              <path d="M50 410 C180 250 270 470 410 230 C475 120 548 154 590 90" fill="none" stroke="url(#line)" stroke-width="3"/>
+              <path d="M35 200 C150 80 260 240 360 150 C450 72 515 86 598 44" fill="none" stroke="url(#line)" stroke-width="2"/>
+              <path d="M78 520 C210 430 320 520 480 360 C540 300 575 305 612 276" fill="none" stroke="url(#line)" stroke-width="2"/>
+            </svg>
+            <div class="molecule"></div><div class="molecule two"></div>
+            <div class="node n1"></div><div class="node n2"></div><div class="node n3"></div><div class="node n4"></div>
+            <div class="ai-card">
+              <div class="ai-card-top"><div class="ai-card-title">Reverse formulation search</div><div class="score">AD confidence 0.86</div></div>
+              <div class="bars"><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="features">
+          <div class="section-head">
+            <div class="kicker">Core Capabilities</div>
+            <h2>从文献证据到候选处方，一站式推进</h2>
+            <p>不是单点工具堆叠，而是围绕纳米制剂研发流程组织的智能工作台。</p>
+          </div>
+          <div class="feature-grid">
+            <article class="feature"><div class="icon">⌁</div><h3>文献解析</h3><p>解析摘要、Methods 与实验描述，提炼处方字段、工艺条件和可引用摘要。</p></article>
+            <article class="feature"><div class="icon">◈</div><h3>公共知识库</h3><p>基于 Supabase / PostgreSQL 的审核式知识库，让团队共享已发布知识片段。</p></article>
+            <article class="feature"><div class="icon">▣</div><h3>CatBoost 预测</h3><p>面向粒径、PDI、EE、DL、flux 等指标进行真实正向机器学习预测。</p></article>
+            <article class="feature"><div class="icon">◇</div><h3>反向处方推荐</h3><p>用户输入目标指标后，由 Optuna 搜索候选处方并用正向模型排序。</p></article>
+            <article class="feature"><div class="icon">✦</div><h3>Pareto 多目标优化</h3><p>同时平衡尺寸、分散性、包封率、载药量和渗透通量，输出多目标前沿。</p></article>
+            <article class="feature"><div class="icon">✺</div><h3>AI 实验助手</h3><p>辅助分析沉淀、粒径异常、PDI 偏高等实验问题，给出排查路径。</p></article>
+          </div>
+        </section>
+
+        <section class="section" id="architecture">
+          <div class="section-head">
+            <div class="kicker">Architecture</div>
+            <h2>面向科研产品化的技术底座</h2>
+          </div>
+          <div class="arch">
+            <div class="chips">
+              <span class="chip">Streamlit</span><span class="chip">Supabase Auth</span><span class="chip">PostgreSQL</span>
+              <span class="chip">CatBoost</span><span class="chip">Optuna</span><span class="chip">Pareto Search</span>
+              <span class="chip">OpenAI-compatible LLM</span><span class="chip">Plotly</span><span class="chip">Joblib Model Bundle</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="metrics">
+          <div class="section-head">
+            <div class="kicker">Live Dashboard</div>
+            <h2>平台状态一眼可见</h2>
+          </div>
+          <div class="dash">
+            <div class="stat"><strong>{html.escape(str(literature_count))}</strong><span>文献数据源</span></div>
+            <div class="stat"><strong>{html.escape(str(public_knowledge))}</strong><span>公共知识条数</span></div>
+            <div class="stat"><strong>{model_count}</strong><span>本地模型 Bundle</span></div>
+            <div class="stat"><strong>{html.escape(str(unique_sessions))}</strong><span>独立会话</span></div>
+            <div class="stat"><strong>{html.escape(str(today_visits))}</strong><span>今日访问</span></div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <div class="kicker">Workflow</div>
+            <h2>把研发流程压缩成清晰闭环</h2>
+          </div>
+          <div class="workflow">
+            <div class="step"><b>01</b><span>文献数据</span></div>
+            <div class="step"><b>02</b><span>字段提取</span></div>
+            <div class="step"><b>03</b><span>模型训练</span></div>
+            <div class="step"><b>04</b><span>目标输入</span></div>
+            <div class="step"><b>05</b><span>反向推荐</span></div>
+            <div class="step"><b>06</b><span>实验验证</span></div>
+          </div>
+        </section>
+
+        <section class="cta">
+          <h2>开始构建你的 rHDL AI 研发流程</h2>
+          <p>立即体验文献解析、处方预测、反向推荐与实验辅助能力。未登录也可以游客模式进入工作台。</p>
+          <div class="cta-actions">
+            <a class="btn primary" href="?route=register" target="_top">注册并开始</a>
+            <a class="btn secondary" href="?route=login" target="_top">登录</a>
+            <a class="btn ghost" href="?route=workspace" target="_top">游客体验</a>
+          </div>
+        </section>
+      </main>
+    </body>
+    </html>
+    """
+
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stToolbar"],
+        div[data-testid="stDecoration"],
+        header[data-testid="stHeader"] { display: none !important; }
+        .main .block-container {
+            padding: 0 !important;
+            max-width: none !important;
+        }
+        iframe {
+            display: block;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    components.html(landing_html, height=2680, scrolling=True)
+
+
+def render_landing_page() -> None:
+    """Native Streamlit landing page; keeps routing reliable while using custom styling."""
+    knowledge_stats = get_knowledge_stats()
+    usage_stats = get_usage_stats()
+    try:
+        data_files = [
+            p
+            for p in os.listdir(DATA_DIR)
+            if p.lower().endswith((".xlsx", ".xls", ".csv"))
+        ] if os.path.isdir(DATA_DIR) else []
+    except Exception:
+        data_files = []
+
+    model_count = 1 if os.path.exists(MODEL_BUNDLE_PATH) else 0
+    literature_count = max(len(data_files), 1 if st.session_state.get("active_df") is not None else 0)
+    public_knowledge = knowledge_stats.get("approved", "--")
+    today_visits = usage_stats.get("today_visits", "--")
+    unique_sessions = usage_stats.get("unique_sessions", "--")
+
+    st.markdown(
+        """
+        <style>
+        header[data-testid="stHeader"],
+        div[data-testid="stToolbar"],
+        div[data-testid="stDecoration"] {
+            display: none !important;
+        }
+        .stApp {
+            background:
+                radial-gradient(circle at 8% 6%, rgba(14,165,233,0.22), transparent 30%),
+                radial-gradient(circle at 92% 10%, rgba(124,58,237,0.18), transparent 32%),
+                radial-gradient(circle at 72% 58%, rgba(45,212,191,0.20), transparent 30%),
+                radial-gradient(circle at 16% 84%, rgba(244,114,182,0.12), transparent 28%),
+                linear-gradient(135deg, #f8fbff 0%, #eaf7ff 34%, #f5fbff 64%, #eefdf8 100%) !important;
+            color: #082f49 !important;
+        }
+        .main .block-container {
+            max-width: 1240px !important;
+            padding: 28px 24px 86px !important;
+        }
+        .landing-nav-native {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 18px;
+            border: 1px solid rgba(14,165,233,0.18);
+            border-radius: 24px;
+            background: rgba(255,255,255,0.72);
+            backdrop-filter: blur(22px);
+            box-shadow: 0 18px 60px rgba(15,55,87,0.10);
+            margin-bottom: 64px;
+        }
+        .landing-brand-native {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            font-weight: 850;
+            color: #082f49;
+        }
+        .landing-brand-mark {
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            background: conic-gradient(from 180deg, #22d3ee, #8b5cf6, #f472b6, #2dd4bf, #22d3ee);
+            box-shadow: 0 0 28px rgba(34,211,238,0.44);
+        }
+        .landing-nav-links {
+            color: #386174;
+            font-size: 14px;
+        }
+        .landing-hero-native {
+            min-height: 660px;
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+            gap: 52px;
+            align-items: center;
+            margin-bottom: 88px;
+        }
+        .landing-eyebrow-native {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 13px;
+            border: 1px solid rgba(34,211,238,0.28);
+            border-radius: 999px;
+            color: #0e7490;
+            background: linear-gradient(135deg, rgba(34,211,238,0.12), rgba(139,92,246,0.12));
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+            font-size: 13px;
+            font-weight: 760;
+            margin-bottom: 22px;
+        }
+        .landing-pulse-native {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #2dd4bf;
+            box-shadow: 0 0 0 0 rgba(45,212,191,0.65);
+            animation: landingPulse 1.8s infinite;
+        }
+        @keyframes landingPulse {
+            70% { box-shadow: 0 0 0 13px rgba(45,212,191,0); }
+            100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); }
+        }
+        .landing-title-native {
+            font-size: clamp(50px, 7vw, 96px);
+            line-height: 0.99;
+            letter-spacing: 0;
+            margin: 0 0 22px;
+            color: #082f49;
+            text-shadow: 0 0 30px rgba(103,232,249,0.32), 0 14px 42px rgba(0,0,0,0.55);
+        }
+        .landing-subtitle-native {
+            max-width: 760px;
+            color: #164e63;
+            font-size: clamp(18px, 2.1vw, 25px);
+            line-height: 1.62;
+            margin: 0 0 16px;
+        }
+        .landing-caption-native {
+            max-width: 690px;
+            color: #386174;
+            font-size: 15px;
+            line-height: 1.78;
+            margin-bottom: 32px;
+        }
+        .landing-visual-native {
+            position: relative;
+            min-height: 550px;
+            border-radius: 44px;
+            border: 1px solid rgba(14,165,233,0.20);
+            background:
+                radial-gradient(circle at 50% 42%, rgba(34,211,238,0.38), transparent 24%),
+                radial-gradient(circle at 72% 20%, rgba(124,58,237,0.18), transparent 30%),
+                linear-gradient(150deg, rgba(255,255,255,0.94), rgba(224,242,254,0.68));
+            overflow: hidden;
+            box-shadow: 0 44px 110px rgba(15,55,87,0.16), inset 0 1px 0 rgba(255,255,255,0.88);
+        }
+        .landing-visual-native:before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(14,165,233,0.12) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(14,165,233,0.12) 1px, transparent 1px);
+            background-size: 38px 38px;
+            mask-image: radial-gradient(circle at 50% 45%, black, transparent 76%);
+        }
+        .landing-orbit-native,
+        .landing-orbit-native.two {
+            position: absolute;
+            inset: 68px;
+            border-radius: 50%;
+            border: 1px solid rgba(14,165,233,0.32);
+            animation: landingSpin 18s linear infinite;
+        }
+        .landing-orbit-native.two {
+            inset: 120px 54px 92px 88px;
+            border-color: rgba(124,58,237,0.22);
+            animation-duration: 25s;
+        }
+        @keyframes landingSpin { to { transform: rotate(360deg); } }
+        .landing-node-native {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 999px;
+            background: #67e8f9;
+            box-shadow: 0 0 28px rgba(103,232,249,0.95);
+        }
+        .landing-node-native.a { left: 82px; top: 112px; }
+        .landing-node-native.b { right: 108px; top: 92px; background: #c084fc; }
+        .landing-node-native.c { left: 136px; bottom: 134px; background: #5eead4; }
+        .landing-node-native.d { right: 78px; bottom: 160px; background: #fbbf24; }
+        .landing-ai-panel-native {
+            position: absolute;
+            left: 34px;
+            right: 34px;
+            bottom: 32px;
+            padding: 22px;
+            border-radius: 26px;
+            background: rgba(255,255,255,0.72);
+            border: 1px solid rgba(14,165,233,0.18);
+            backdrop-filter: blur(22px);
+            box-shadow: 0 24px 70px rgba(15,55,87,0.12);
+        }
+        .landing-ai-panel-title {
+            color: #082f49;
+            font-size: 17px;
+            font-weight: 850;
+            margin-bottom: 16px;
+        }
+        .landing-bar-native {
+            height: 11px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #22d3ee, #8b5cf6, #f472b6);
+            box-shadow: 0 0 18px rgba(34,211,238,0.24);
+            margin-top: 11px;
+        }
+        .landing-bar-native.two { width: 76%; opacity: 0.72; }
+        .landing-bar-native.three { width: 58%; opacity: 0.54; }
+        .landing-section-native {
+            margin-bottom: 88px;
+        }
+        .landing-section-head-native {
+            text-align: center;
+            max-width: 760px;
+            margin: 0 auto 30px;
+        }
+        .landing-kicker-native {
+            color: #0891b2;
+            text-transform: uppercase;
+            letter-spacing: 0.13em;
+            font-size: 12px;
+            font-weight: 900;
+            margin-bottom: 12px;
+        }
+        .landing-section-head-native h2 {
+            color: #082f49;
+            font-size: clamp(32px, 4.5vw, 56px);
+            line-height: 1.08;
+            margin: 0;
+        }
+        .landing-section-head-native p {
+            color: #386174;
+            line-height: 1.72;
+            font-size: 16px;
+        }
+        .landing-feature-grid-native,
+        .landing-stat-grid-native {
+            display: grid;
+            gap: 18px;
+        }
+        .landing-feature-grid-native {
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        }
+        .landing-stat-grid-native {
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        }
+        .landing-feature-native,
+        .landing-stat-native,
+        .landing-arch-native,
+        .landing-cta-native {
+            border: 1px solid rgba(14,165,233,0.16);
+            background:
+                linear-gradient(145deg, rgba(255,255,255,0.88), rgba(240,249,255,0.72)),
+                radial-gradient(circle at 90% 8%, rgba(34,211,238,0.16), transparent 30%);
+            backdrop-filter: blur(18px);
+            box-shadow: 0 24px 70px rgba(15,55,87,0.10);
+        }
+        .landing-feature-native {
+            min-height: 230px;
+            padding: 24px;
+            border-radius: 28px;
+            transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+        .landing-feature-native:hover {
+            transform: translateY(-7px);
+            box-shadow: 0 32px 88px rgba(14,165,233,0.18), 0 22px 60px rgba(45,212,191,0.12);
+        }
+        .landing-icon-native {
+            width: 52px;
+            height: 52px;
+            border-radius: 18px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 20px;
+            font-size: 24px;
+            color: #082f49;
+            background: linear-gradient(135deg, rgba(14,165,233,0.18), rgba(45,212,191,0.18));
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 12px 34px rgba(34,211,238,0.12);
+        }
+        .landing-feature-native h3 {
+            color: #082f49;
+            margin: 0 0 10px;
+            font-size: 21px;
+        }
+        .landing-feature-native p {
+            color: #386174;
+            line-height: 1.7;
+            margin: 0;
+            font-size: 14.5px;
+        }
+        .landing-chip-row-native {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 13px;
+        }
+        .landing-chip-native {
+            padding: 12px 16px;
+            border-radius: 999px;
+            color: #155e75;
+            border: 1px solid rgba(14,165,233,0.18);
+            background: linear-gradient(135deg, rgba(224,242,254,0.88), rgba(204,251,241,0.62));
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+            font-weight: 760;
+            font-size: 14px;
+        }
+        .landing-arch-native,
+        .landing-cta-native {
+            border-radius: 34px;
+            padding: 34px;
+        }
+        .landing-stat-native {
+            border-radius: 26px;
+            padding: 22px;
+            min-height: 132px;
+        }
+        .landing-stat-native strong {
+            display: block;
+            font-size: clamp(28px, 3.5vw, 44px);
+            line-height: 1;
+            background: linear-gradient(135deg, #fff, #67e8f9, #c4b5fd);
+            -webkit-background-clip: text;
+            color: transparent;
+            margin-bottom: 12px;
+        }
+        .landing-stat-native span {
+            color: #386174;
+            font-size: 13px;
+        }
+        .landing-workflow-native {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+        }
+        .landing-step-native {
+            padding: 18px 14px;
+            min-height: 108px;
+            border-radius: 22px;
+            border: 1px solid rgba(14,165,233,0.16);
+            background: rgba(255,255,255,0.70);
+            text-align: center;
+            display: grid;
+            align-content: center;
+            gap: 8px;
+        }
+        .landing-step-native b {
+            color: #0e7490;
+            font-size: 19px;
+        }
+        .landing-step-native span {
+            color: #386174;
+            font-size: 13px;
+        }
+        .landing-cta-native {
+            text-align: center;
+            padding: 58px 30px;
+            background:
+                radial-gradient(circle at 24% 12%, rgba(34,211,238,0.24), transparent 26%),
+                radial-gradient(circle at 80% 20%, rgba(124,58,237,0.14), transparent 28%),
+                linear-gradient(135deg, rgba(255,255,255,0.86), rgba(224,242,254,0.72));
+            margin-bottom: 20px;
+        }
+        .landing-cta-native h2 {
+            color: #082f49;
+            max-width: 780px;
+            margin: 0 auto 16px;
+            font-size: clamp(30px, 4vw, 54px);
+        }
+        .landing-cta-native p {
+            color: #386174;
+            max-width: 680px;
+            margin: 0 auto 28px;
+            line-height: 1.72;
+        }
+        .stButton > button {
+            width: auto !important;
+            min-width: 136px !important;
+            height: 52px !important;
+            padding: 0 22px !important;
+            border: 0 !important;
+            border-radius: 16px !important;
+            color: #ffffff !important;
+            font-size: 15px !important;
+            font-weight: 820 !important;
+            background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 52%, #ff4ecd 100%) !important;
+            box-shadow: 0 16px 42px rgba(14,165,233,0.24), 0 0 0 1px rgba(255,255,255,0.46) inset !important;
+            transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+        }
+        .stButton > button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 22px 54px rgba(14,165,233,0.24), 0 0 36px rgba(45,212,191,0.18) !important;
+        }
+        @media (max-width: 980px) {
+            .landing-hero-native { grid-template-columns: 1fr; min-height: auto; }
+            .landing-visual-native { min-height: 430px; }
+        }
+        @media (max-width: 640px) {
+            .main .block-container { padding: 18px 14px 54px !important; }
+            .landing-nav-native { align-items: flex-start; flex-direction: column; }
+            .landing-title-native { font-size: clamp(42px, 14vw, 64px); }
+            .landing-visual-native { min-height: 380px; border-radius: 32px; }
+            .stButton > button { width: 100% !important; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <div class="landing-nav-native">
+            <div class="landing-brand-native">
+                <span class="landing-brand-mark"></span>
+                <span>rHDL AI Research Platform</span>
+            </div>
+            <div class="landing-nav-links">平台能力 · 技术架构 · 模型推荐 · AI 实验助手</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    hero_left, hero_right = st.columns([1.05, 0.95], gap="large")
+    with hero_left:
+        st.markdown(
+            """
+            <div class="landing-eyebrow-native"><span class="landing-pulse-native"></span>AI + Nanomedicine Formulation Intelligence</div>
+            <h1 class="landing-title-native">下一代 AI 纳米制剂研发平台</h1>
+            <p class="landing-subtitle-native">面向 rHDL / 纳米递送 / 文献知识库 / 机器学习反向处方设计的智能科研工作台。</p>
+            <p class="landing-caption-native">将文献解析、公共知识库、CatBoost 正向预测、Optuna 与 Pareto 多目标搜索、实验问题诊断串联成可复用的研发闭环。</p>
+            """,
+            unsafe_allow_html=True,
+        )
+        c1, c2, c3 = st.columns([1, 0.9, 0.7])
+        with c1:
+            if st.button("进入工作台 ↗", key="landing_native_enter_workspace"):
+                set_route("workspace")
+                st.rerun()
+        with c2:
+            if st.button("注册账号", key="landing_native_register"):
+                set_route("register")
+                st.rerun()
+        with c3:
+            if st.button("登录", key="landing_native_login"):
+                set_route("login")
+                st.rerun()
+    with hero_right:
+        st.markdown(
+            """
+            <div class="landing-visual-native">
+                <div class="landing-orbit-native"></div>
+                <div class="landing-orbit-native two"></div>
+                <div class="landing-node-native a"></div>
+                <div class="landing-node-native b"></div>
+                <div class="landing-node-native c"></div>
+                <div class="landing-node-native d"></div>
+                <div class="landing-ai-panel-native">
+                    <div class="landing-ai-panel-title">Reverse formulation search · AD confidence 0.86</div>
+                    <div class="landing-bar-native"></div>
+                    <div class="landing-bar-native two"></div>
+                    <div class="landing-bar-native three"></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(
+        """
+        <section class="landing-section-native">
+            <div class="landing-section-head-native">
+                <div class="landing-kicker-native">Core Capabilities</div>
+                <h2>从文献证据到候选处方，一站式推进</h2>
+                <p>不是单点工具堆叠，而是围绕纳米制剂研发流程组织的智能工作台。</p>
+            </div>
+            <div class="landing-feature-grid-native">
+                <article class="landing-feature-native"><div class="landing-icon-native">⌁</div><h3>文献解析</h3><p>解析摘要、Methods 与实验描述，提炼处方字段、工艺条件和可引用摘要。</p></article>
+                <article class="landing-feature-native"><div class="landing-icon-native">◈</div><h3>公共知识库</h3><p>基于 Supabase / PostgreSQL 的审核式知识库，让团队共享已发布知识片段。</p></article>
+                <article class="landing-feature-native"><div class="landing-icon-native">▣</div><h3>CatBoost 预测</h3><p>面向粒径、PDI、EE、DL、flux 等指标进行真实正向机器学习预测。</p></article>
+                <article class="landing-feature-native"><div class="landing-icon-native">◇</div><h3>反向处方推荐</h3><p>用户输入目标指标后，由 Optuna 搜索候选处方并用正向模型排序。</p></article>
+                <article class="landing-feature-native"><div class="landing-icon-native">✦</div><h3>Pareto 多目标优化</h3><p>同时平衡尺寸、分散性、包封率、载药量和渗透通量，输出多目标前沿。</p></article>
+                <article class="landing-feature-native"><div class="landing-icon-native">✺</div><h3>AI 实验助手</h3><p>辅助分析沉淀、粒径异常、PDI 偏高等实验问题，给出排查路径。</p></article>
+            </div>
+        </section>
+        <section class="landing-section-native">
+            <div class="landing-section-head-native">
+                <div class="landing-kicker-native">Architecture</div>
+                <h2>面向科研产品化的技术底座</h2>
+            </div>
+            <div class="landing-arch-native">
+                <div class="landing-chip-row-native">
+                    <span class="landing-chip-native">Streamlit</span><span class="landing-chip-native">Supabase Auth</span><span class="landing-chip-native">PostgreSQL</span>
+                    <span class="landing-chip-native">CatBoost</span><span class="landing-chip-native">Optuna</span><span class="landing-chip-native">Pareto Search</span>
+                    <span class="landing-chip-native">OpenAI-compatible LLM</span><span class="landing-chip-native">Plotly</span><span class="landing-chip-native">Joblib Model Bundle</span>
+                </div>
+            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"""
+        <section class="landing-section-native">
+            <div class="landing-section-head-native">
+                <div class="landing-kicker-native">Live Dashboard</div>
+                <h2>平台状态一眼可见</h2>
+            </div>
+            <div class="landing-stat-grid-native">
+                <div class="landing-stat-native"><strong>{html.escape(str(literature_count))}</strong><span>文献数据源</span></div>
+                <div class="landing-stat-native"><strong>{html.escape(str(public_knowledge))}</strong><span>公共知识条数</span></div>
+                <div class="landing-stat-native"><strong>{model_count}</strong><span>本地模型 Bundle</span></div>
+                <div class="landing-stat-native"><strong>{html.escape(str(unique_sessions))}</strong><span>独立会话</span></div>
+                <div class="landing-stat-native"><strong>{html.escape(str(today_visits))}</strong><span>今日访问</span></div>
+            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <section class="landing-section-native">
+            <div class="landing-section-head-native">
+                <div class="landing-kicker-native">Workflow</div>
+                <h2>把研发流程压缩成清晰闭环</h2>
+            </div>
+            <div class="landing-workflow-native">
+                <div class="landing-step-native"><b>01</b><span>文献数据</span></div>
+                <div class="landing-step-native"><b>02</b><span>字段提取</span></div>
+                <div class="landing-step-native"><b>03</b><span>模型训练</span></div>
+                <div class="landing-step-native"><b>04</b><span>目标输入</span></div>
+                <div class="landing-step-native"><b>05</b><span>反向推荐</span></div>
+                <div class="landing-step-native"><b>06</b><span>实验验证</span></div>
+            </div>
+        </section>
+        <section class="landing-cta-native">
+            <h2>开始构建你的 rHDL AI 研发流程</h2>
+            <p>立即体验文献解析、处方预测、反向推荐与实验辅助能力。未登录也可以游客模式进入工作台。</p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    bottom_left, bottom_mid, bottom_right = st.columns([1, 0.8, 0.9])
+    with bottom_left:
+        if st.button("注册并开始", key="landing_native_bottom_register"):
+            set_route("register")
+            st.rerun()
+    with bottom_mid:
+        if st.button("登录", key="landing_native_bottom_login"):
+            set_route("login")
+            st.rerun()
+    with bottom_right:
+        if st.button("游客体验", key="landing_native_bottom_workspace"):
             set_route("workspace")
             st.rerun()
 
@@ -3951,21 +5155,34 @@ def render_workspace_topbar() -> None:
     st.markdown('<div class="nav-panel">', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns([2.2, 1, 1, 1])
     with c1:
-        email = st.session_state.get("user_email") or "未登录"
-        st.caption(f"当前用户：{email} · 角色：{st.session_state.get('user_role', 'guest')}")
+        if st.session_state.get("is_logged_in"):
+            email = st.session_state.get("user_email") or "已登录用户"
+            st.caption(f"当前用户：{email} · 角色：{st.session_state.get('user_role', 'user')}")
+        else:
+            st.caption("当前模式：游客体验 · 登录后可保存项目、推荐历史和报告")
     with c2:
         if st.button("返回首页", use_container_width=True, key="workspace_back_landing_btn"):
             set_route("landing")
             st.rerun()
     with c3:
-        if st.button("我的空间", use_container_width=True, key="workspace_profile_btn"):
-            st.session_state.active_page = "我的空间"
-            set_route("workspace")
-            st.rerun()
+        if st.session_state.get("is_logged_in"):
+            if st.button("我的空间", use_container_width=True, key="workspace_profile_btn"):
+                st.session_state.active_page = "我的空间"
+                set_route("workspace")
+                st.rerun()
+        else:
+            if st.button("登录", use_container_width=True, key="workspace_guest_login_btn"):
+                set_route("login")
+                st.rerun()
     with c4:
-        if st.button("退出登录", use_container_width=True, key="workspace_logout_btn"):
-            sign_out_user()
-            st.rerun()
+        if st.session_state.get("is_logged_in"):
+            if st.button("退出登录", use_container_width=True, key="workspace_logout_btn"):
+                sign_out_user()
+                st.rerun()
+        else:
+            if st.button("注册", use_container_width=True, key="workspace_guest_register_btn"):
+                set_route("register")
+                st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -6054,6 +7271,25 @@ def render_knowledge_tab(df_main: Optional[pd.DataFrame]) -> None:
                 queue_prompt(f"请解释一下字段 {field_name} 的含义，并说明它在当前数据库里有什么作用")
 
 
+def render_knowledge_search_only_panel() -> None:
+    st.markdown("#### 知识检索")
+    q = st.text_input("输入知识问题", value="为什么超声后会出现白色沉淀？", key="knowledge_search_only_query_input")
+    qa1, qa2 = st.columns(2)
+    if qa1.button("检索知识库", use_container_width=True, key="knowledge_search_only_btn"):
+        record_usage_event("knowledge_search", page_name=st.session_state.get("active_page", ""))
+        result = search_knowledge_impl(q, top_k=6)
+        render_tool_result("search_knowledge", result)
+    if qa2.button("交给 纳米制剂开发助手", use_container_width=True, key="knowledge_search_only_agent_btn"):
+        queue_prompt(q)
+
+    approved_text = load_approved_knowledge_text().strip()
+    preview_text = approved_text if approved_text else DEFAULT_KNOWLEDGE
+    stats = get_knowledge_stats()
+    st.metric("已发布知识条目数", stats.get("approved", 0))
+    st.caption(f"待审核 {stats.get('pending', 0)} · 已拒绝 {stats.get('rejected', 0)} · 公共知识 {stats.get('approved_chars', 0)} 字")
+    st.text_area("已发布知识内容预览", value=preview_text, height=220, key="knowledge_search_only_preview_textarea")
+
+
 def get_home_metrics(df_main: Optional[pd.DataFrame]) -> List[Tuple[str, Any]]:
     """首页概览用的关键指标。"""
     knowledge_count = get_knowledge_stats().get("approved", 0)
@@ -6122,7 +7358,6 @@ def render_home_page(df_main: Optional[pd.DataFrame]) -> None:
         ("🧬", "rHDL纳米制剂处方设计", "根据目标包封率、目标粒径和PDI等约束，逆向生成候选处方与工艺参数。", "rHDL纳米制剂处方设计"),
         ("📈", "rHDL纳米制剂处方预测", "输入脂质比例、蛋白比例、温度和时间，预测粒径、PDI和包封率。", "rHDL纳米制剂处方预测"),
         ("🧪", "实验小助手", "面向沉淀、粒径异常、PDI偏高、包封率低等实验问题，提供诊断与SOP辅助。", "实验小助手"),
-        ("🗂️", "数据分析工作台", "保留原有数据筛选、样本对比、排名分组和密码下载功能。", "数据分析工作台"),
     ]
 
     rows = [cards[:3], cards[3:]]
@@ -6179,19 +7414,17 @@ def render_home_page(df_main: Optional[pd.DataFrame]) -> None:
         switch_page("rHDL纳米制剂处方设计")
     if q3.button("文献重点提炼", use_container_width=True, key="home_quick_lit"):
         switch_page("文献解析中心")
-    if q4.button("数据筛选分析", use_container_width=True, key="home_quick_data"):
-        switch_page("数据分析工作台")
     st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_literature_page(df_main: Optional[pd.DataFrame]) -> None:
-    """文献解析中心：整合文献解析、知识检索、字段解释和原总览可视化图表。"""
+    """文献解析中心：整合文献解析和原总览可视化图表。"""
     render_module_header(
         "文献解析中心",
         "用于阅读文献、提炼研究重点、解析处方/工艺字段，并查看文献数据库的整体分布图表。",
     )
 
-    tabs = st.tabs(["📖 文献重点提炼", "📊 文献数据库可视化", "🔎 知识检索与字段解释"])
+    tabs = st.tabs(["📖 文献重点提炼", "📊 文献数据库可视化"])
     with tabs[0]:
         st.markdown("#### 文献内容输入")
         lit_text = st.text_area(
@@ -6233,9 +7466,6 @@ def render_literature_page(df_main: Optional[pd.DataFrame]) -> None:
         st.markdown("#### 文献数据库可视化")
         st.caption("这里保留原“总览看板”的所有可视化图表，包括分类分布、粒径/包封率分布、粒径-PDI散点图和同类指标合并后的归一化分布图。")
         render_overview_tab(df_main)
-
-    with tabs[2]:
-        render_knowledge_tab(df_main)
 
 
 def render_formulation_design_page() -> None:
@@ -6493,7 +7723,7 @@ def render_lab_assistant_page(df_main: Optional[pd.DataFrame]) -> None:
             queue_prompt("请根据当前rHDL纳米制剂开发项目，给出下一步实验优化建议。")
 
     st.markdown("#### 知识库快速检索")
-    render_knowledge_tab(df_main)
+    render_knowledge_search_only_panel()
 
 
 def render_data_analysis_workspace(df_main: Optional[pd.DataFrame]) -> None:
@@ -6527,7 +7757,6 @@ def render_page_navigation() -> str:
         "rHDL纳米制剂处方设计",
         "rHDL纳米制剂处方预测",
         "实验小助手",
-        "数据分析工作台",
         "我的空间",
     ]
     if is_admin_user():
@@ -6538,7 +7767,6 @@ def render_page_navigation() -> str:
         "rHDL纳米制剂处方设计": "处方设计",
         "rHDL纳米制剂处方预测": "处方预测",
         "实验小助手": "实验小助手",
-        "数据分析工作台": "数据工作",
         "我的空间": "我的空间",
         "管理后台": "管理后台",
     }
@@ -6584,8 +7812,6 @@ def render_main_area(df_main: Optional[pd.DataFrame]) -> None:
             render_formulation_prediction_page(df_main)
         elif selected_page == "实验小助手":
             render_lab_assistant_page(df_main)
-        elif selected_page == "数据分析工作台":
-            render_data_analysis_workspace(df_main)
         elif selected_page == "我的空间":
             render_profile_page()
         elif selected_page == "管理后台":
@@ -6714,12 +7940,6 @@ def render_chat_panel() -> None:
 
 
 def render_workspace_page() -> None:
-    if not st.session_state.get("is_logged_in"):
-        st.info("请先登录后进入工作台。")
-        if st.button("去登录", use_container_width=True, key="workspace_require_login_btn"):
-            set_route("login")
-            st.rerun()
-        return
     render_workspace_topbar()
     render_sidebar()
     df_main, _ = load_active_database()
@@ -6747,6 +7967,13 @@ def render_standalone_admin_route() -> None:
 # =========================
 def main() -> None:
     init_session_state()
+    try:
+        requested_route = st.query_params.get("route")
+        if requested_route in {"landing", "login", "register", "workspace", "profile", "admin"}:
+            st.session_state.route = requested_route
+            st.query_params.clear()
+    except Exception:
+        pass
     init_knowledge_db()
     init_usage_tracking()
     try_autoload_saved_model()
