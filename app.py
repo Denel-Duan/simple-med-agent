@@ -4202,7 +4202,7 @@ def render_landing_page() -> None:
         st.markdown(
             """
             <div class="landing-eyebrow-native"><span class="landing-pulse-native"></span>AI + Nanomedicine Formulation Intelligence</div>
-            <h1 class="landing-title-native">下一代 AI 纳米制剂研发平台</h1>
+            <h1 class="landing-title-native">AI 纳米制剂研发平台</h1>
             <p class="landing-subtitle-native">面向 rHDL / 纳米递送 / 文献知识库 / 机器学习反向处方设计的智能科研工作台。</p>
             <p class="landing-caption-native">将文献解析、公共知识库、CatBoost 正向预测、Optuna 与 Pareto 多目标搜索、实验问题诊断串联成可复用的研发闭环。</p>
             """,
