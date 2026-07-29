@@ -1,10 +1,13 @@
 import os
 import io
+import base64
+import hashlib
 import json
 import random
 import re
 import html
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
@@ -212,6 +215,30 @@ THEME_CONFIG = {
         "input_bg": "#ffffff",
         "grid": "#d9e2ef",
     },
+    "护眼": {
+        "bg": "#E8EEE7",
+        "bg_grad_1": "#EDF2EA",
+        "bg_grad_2": "#E1E9E1",
+        "card": "#F5F8F1",
+        "card_alt": "#EBF1E9",
+        "line": "#C4D0C4",
+        "text": "#263A34",
+        "muted": "#66776F",
+        "sidebar_1": "#E6EDE4",
+        "sidebar_2": "#DCE7DE",
+        "hero_1": "#4F8377",
+        "hero_2": "#657F8D",
+        "chat_1": "#F1F5EF",
+        "chat_2": "#E7EFE9",
+        "chat_line": "#C2D0C5",
+        "chip_bg": "#DDE9DF",
+        "chip_line": "#B8CABD",
+        "chip_text": "#355B50",
+        "accent": "#4F8174",
+        "accent_soft": "rgba(79,129,116,0.11)",
+        "input_bg": "#F4F7F0",
+        "grid": "#CAD5CA",
+    },
     "深色": {
         "bg": "#07111F",
         "bg_grad_1": "#07111F",
@@ -259,6 +286,7 @@ def init_session_state() -> None:
         "db_sheet_name": None,
         "active_df": None,
         "active_db_name": "未加载",
+        "_active_db_fingerprint": None,
         "theme_mode": "浅色",
         "active_page": "首页概览",
         "ml_training_bundle": None,
@@ -272,6 +300,10 @@ def init_session_state() -> None:
         "model_load_attempted": False,
         "route": "landing",
         "auth_user": None,
+        "onboarding_prompt_shown": False,
+        "onboarding_active": False,
+        "onboarding_step": 0,
+        "onboarding_completed": False,
         "user_email": "",
         "user_id": "",
         "user_role": "guest",
@@ -293,7 +325,12 @@ def init_session_state() -> None:
 # =========================
 def apply_theme_css(theme_name: str) -> None:
     cfg = THEME_CONFIG.get(theme_name, THEME_CONFIG["浅色"])
-    chat_title = "#1f1f1f" if theme_name == "浅色" else "#EAF2F8"
+    if theme_name == "深色":
+        chat_title = "#EAF2F8"
+    elif theme_name == "护眼":
+        chat_title = "#263A34"
+    else:
+        chat_title = "#1f1f1f"
 
     dark_override = """
 /* =========================
@@ -307,6 +344,28 @@ def apply_theme_css(theme_name: str) -> None:
         radial-gradient(circle at 55% 95%, rgba(99,102,241,0.10) 0, transparent 34%),
         linear-gradient(180deg, #07111F 0%, #0B1F2F 55%, #07111F 100%) !important;
     color: #EAF2F8 !important;
+}
+
+header[data-testid="stHeader"] {
+    background: rgba(7,17,31,0.98) !important;
+    border-bottom: 1px solid rgba(32,56,77,0.72) !important;
+    box-shadow: none !important;
+}
+
+header[data-testid="stHeader"] [data-testid="stToolbar"],
+header[data-testid="stHeader"] [data-testid="stToolbar"] button {
+    background: transparent !important;
+    color: #C7D8E8 !important;
+}
+
+header[data-testid="stHeader"] svg,
+header[data-testid="stHeader"] span {
+    color: #C7D8E8 !important;
+    fill: currentColor !important;
+}
+
+div[data-testid="stDecoration"] {
+    display: none !important;
 }
 
 .main .block-container {
@@ -491,6 +550,20 @@ section[data-testid="stSidebar"] [role="radiogroup"] label {
     background: rgba(11,31,47,0.48) !important;
     border: none !important;
     color: #EAF2F8 !important;
+    -webkit-text-fill-color: #EAF2F8 !important;
+    caret-color: #67E8F9 !important;
+    opacity: 1 !important;
+}
+.copilot-shell .stTextArea textarea::placeholder {
+    color: #87A3B8 !important;
+    -webkit-text-fill-color: #87A3B8 !important;
+    opacity: 1 !important;
+}
+.copilot-shell .stTextArea [data-testid="InputInstructions"],
+.copilot-shell .stTextArea small {
+    color: #7891A6 !important;
+    -webkit-text-fill-color: #7891A6 !important;
+    opacity: 1 !important;
 }
 .chat-clear-row [data-testid="stBaseButton-secondary"] {
     background: rgba(18,52,74,0.66) !important;
@@ -525,6 +598,236 @@ button[data-baseweb="tab"][aria-selected="true"] {
     border: 1px solid #24465F !important;
 }
 """ if theme_name == "深色" else ""
+
+    eye_override = """
+/* =========================
+   Eye-comfort theme override
+   Low-glare sage green for long reading and analysis sessions.
+   ========================= */
+.stApp {
+    background:
+        radial-gradient(circle at 10% 8%, rgba(103,145,126,0.10) 0, transparent 30%),
+        radial-gradient(circle at 88% 12%, rgba(104,137,153,0.08) 0, transparent 28%),
+        linear-gradient(180deg, #EDF2EA 0%, #E3EBE4 54%, #E8EEE7 100%) !important;
+    color: #263A34 !important;
+}
+
+header[data-testid="stHeader"] {
+    background: rgba(237,242,234,0.97) !important;
+    border-bottom: 1px solid #C4D0C4 !important;
+    box-shadow: none !important;
+}
+header[data-testid="stHeader"] [data-testid="stToolbar"],
+header[data-testid="stHeader"] [data-testid="stToolbar"] button {
+    background: transparent !important;
+    color: #355B50 !important;
+}
+header[data-testid="stHeader"] svg,
+header[data-testid="stHeader"] span {
+    color: #355B50 !important;
+    fill: currentColor !important;
+}
+
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #E7EEE5 0%, #DDE8DF 100%) !important;
+    border-right: 1px solid #BCCABD !important;
+}
+
+.sidebar-card,
+div[data-testid="stMetric"],
+.home-stat-card,
+.soft-card,
+.soft-panel,
+.module-head,
+.quick-card,
+.capture-box,
+.nav-panel,
+.feature-card {
+    background: rgba(245,248,241,0.90) !important;
+    border: 1px solid #C4D0C4 !important;
+    box-shadow: 0 14px 34px rgba(55,80,67,0.08), inset 0 1px 0 rgba(255,255,255,0.58) !important;
+    backdrop-filter: blur(10px) !important;
+}
+
+.sidebar-title,
+.soft-title,
+.section-title,
+.panel-title,
+.feature-title,
+.module-title,
+.feature-grid-title,
+.home-stat-value,
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] span,
+label,
+.stCaption,
+.stText {
+    color: #263A34 !important;
+}
+
+.sidebar-desc,
+.section-sub,
+.panel-note,
+.feature-desc,
+.module-sub,
+.feature-grid-sub,
+.home-stat-label,
+.copilot-sub,
+.copilot-hint,
+.chat-composer-caption {
+    color: #66776F !important;
+}
+
+.hero {
+    background:
+        radial-gradient(circle at 90% -10%, rgba(255,255,255,0.16) 0, transparent 38%),
+        linear-gradient(135deg, #4F8377 0%, #557F80 55%, #657F8D 100%) !important;
+    border: 1px solid rgba(73,112,101,0.30) !important;
+    box-shadow: 0 18px 42px rgba(69,103,88,0.15) !important;
+}
+.hero-title,
+.hero-sub,
+.hero-sub b {
+    color: #F7FBF6 !important;
+}
+.hero:after {
+    background: rgba(49,78,70,0.30) !important;
+    border-color: rgba(232,244,237,0.34) !important;
+    color: #F7FBF6 !important;
+}
+
+.feature-card:hover {
+    border-color: rgba(79,129,116,0.46) !important;
+    box-shadow: 0 20px 44px rgba(55,80,67,0.13) !important;
+}
+.feature-icon,
+.feature-grid-title:before {
+    background: linear-gradient(135deg, rgba(91,145,128,0.16), rgba(104,137,153,0.12)) !important;
+    color: #3F7669 !important;
+}
+.feature-card-0:before,
+.feature-card-3:before {
+    background: linear-gradient(90deg,#5E9B89,#78A98E) !important;
+}
+.feature-card-1:before,
+.feature-card-4:before {
+    background: linear-gradient(90deg,#658FA0,#729481) !important;
+}
+.feature-card-2:before {
+    background: linear-gradient(90deg,#708C9D,#699682) !important;
+}
+.home-stat-card:before {
+    background: linear-gradient(180deg,#5E9181,#658FA0) !important;
+}
+.home-stat-value {
+    color: #3F7669 !important;
+}
+
+.nav-panel [data-testid="stBaseButton-primary"],
+.copilot-shell [data-testid="stFormSubmitButton"] button {
+    background: linear-gradient(135deg, #5A8D7F 0%, #597E88 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    box-shadow: 0 10px 24px rgba(72,112,97,0.18) !important;
+}
+.nav-panel [data-testid="stBaseButton-secondary"],
+.stButton > button,
+.stDownloadButton > button,
+[data-testid="stFormSubmitButton"] button,
+.copilot-card [data-testid="stBaseButton-secondary"] {
+    background: rgba(239,245,237,0.94) !important;
+    border: 1px solid #B9C9BB !important;
+    color: #2D4A42 !important;
+    box-shadow: 0 7px 16px rgba(55,80,67,0.07) !important;
+}
+.stButton > button:hover,
+.stDownloadButton > button:hover,
+[data-testid="stFormSubmitButton"] button:hover,
+.copilot-card [data-testid="stBaseButton-secondary"]:hover {
+    background: #DDE9DF !important;
+    border-color: #78A08F !important;
+    color: #315F53 !important;
+    box-shadow: 0 10px 22px rgba(72,112,97,0.12) !important;
+}
+
+section[data-testid="stSidebar"] .stTextInput input,
+section[data-testid="stSidebar"] .stTextArea textarea,
+section[data-testid="stSidebar"] .stNumberInput input,
+section[data-testid="stSidebar"] [data-baseweb="select"] > div,
+.stTextArea textarea,
+.stTextInput input,
+.stNumberInput input,
+.copilot-shell .stTextArea textarea {
+    background: #F4F7F0 !important;
+    border: 1px solid #B9C8BA !important;
+    color: #263A34 !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.58) !important;
+}
+section[data-testid="stSidebar"] .stTextInput input:focus,
+section[data-testid="stSidebar"] .stTextArea textarea:focus,
+section[data-testid="stSidebar"] .stNumberInput input:focus,
+.copilot-shell .stTextArea textarea:focus {
+    border-color: #6E9C89 !important;
+    box-shadow: 0 0 0 3px rgba(79,129,116,0.13) !important;
+}
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+    background: rgba(239,245,237,0.78) !important;
+    border: 1px dashed #9AB3A1 !important;
+}
+section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button,
+section[data-testid="stSidebar"] [role="radiogroup"] label {
+    background: #EDF3EA !important;
+    color: #355B50 !important;
+    border: 1px solid #B9C9BB !important;
+}
+
+.copilot-card {
+    background: linear-gradient(180deg, rgba(245,248,241,0.96) 0%, rgba(231,239,233,0.94) 100%) !important;
+    border: 1px solid #BCCABD !important;
+    box-shadow: 0 16px 38px rgba(55,80,67,0.09) !important;
+}
+.copilot-title {
+    color: #263A34 !important;
+}
+.copilot-chip {
+    background: #DDE9DF !important;
+    border-color: #B6C9BA !important;
+    color: #355B50 !important;
+}
+.copilot-divider {
+    background: #C4D0C4 !important;
+}
+.copilot-shell [data-testid="stForm"] {
+    background: rgba(232,239,232,0.76) !important;
+    border: 1px solid #BCCABD !important;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+    background: rgba(230,238,229,0.88) !important;
+    border: 1px solid #C4D0C4 !important;
+}
+button[data-baseweb="tab"] {
+    background: #EEF3EB !important;
+    color: #596D65 !important;
+    border: 1px solid #C4D0C4 !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #FFFFFF !important;
+    background: linear-gradient(135deg, #5A8D7F 0%, #597E88 100%) !important;
+    border-bottom-color: #4F8174 !important;
+}
+
+[data-testid="stDataFrame"] {
+    background: #F3F6EF !important;
+    border: 1px solid #C4D0C4 !important;
+}
+[data-testid="stAlert"] {
+    background: rgba(224,235,225,0.88) !important;
+    color: #2D4A42 !important;
+    border: 1px solid #B6C8B8 !important;
+}
+""" if theme_name == "护眼" else ""
 
     st.markdown(
         f"""
@@ -1394,6 +1697,7 @@ section[data-testid="stSidebar"] [role="radiogroup"] label:hover {{
 }}
 
 {dark_override}
+{eye_override}
 
 /* Dark theme fallback: keep controls readable when the user toggles dark mode. */
 [data-theme="dark"] section[data-testid="stSidebar"] .stTextInput input,
@@ -1485,6 +1789,185 @@ section[data-testid="stSidebar"] [role="radiogroup"] label:hover {{
     font-weight: 850 !important;
 }}
 
+/* =========================
+   Workspace typography scale
+   Keep the existing layout while improving hierarchy and text fit.
+   ========================= */
+.main h1 {{
+    font-size: clamp(28px, 2.2vw, 34px) !important;
+    line-height: 1.20 !important;
+}}
+.main h2 {{
+    font-size: clamp(22px, 1.8vw, 27px) !important;
+    line-height: 1.25 !important;
+}}
+.main h3 {{
+    font-size: clamp(17px, 1.35vw, 20px) !important;
+    line-height: 1.35 !important;
+}}
+section[data-testid="stSidebar"] h1 {{
+    font-size: 22px !important;
+    line-height: 1.25 !important;
+}}
+section[data-testid="stSidebar"] h2 {{
+    font-size: 19px !important;
+    line-height: 1.30 !important;
+}}
+section[data-testid="stSidebar"] h3 {{
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+}}
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] label {{
+    font-size: 13px !important;
+    line-height: 1.55 !important;
+}}
+.hero-title {{
+    font-size: clamp(25px, 2vw, 30px) !important;
+    line-height: 1.18 !important;
+}}
+.hero-sub {{
+    font-size: 13.5px !important;
+    line-height: 1.72 !important;
+}}
+.feature-grid-title {{
+    font-size: 23px !important;
+    line-height: 1.25 !important;
+}}
+.feature-grid-sub {{
+    font-size: 13px !important;
+    line-height: 1.70 !important;
+}}
+.feature-title {{
+    font-size: 17px !important;
+    line-height: 1.42 !important;
+}}
+.feature-desc {{
+    font-size: 13px !important;
+    line-height: 1.72 !important;
+}}
+.module-title {{
+    font-size: 23px !important;
+    line-height: 1.25 !important;
+}}
+.module-sub {{
+    font-size: 13px !important;
+    line-height: 1.72 !important;
+}}
+.copilot-title {{
+    font-size: clamp(22px, 1.75vw, 27px) !important;
+    line-height: 1.28 !important;
+}}
+.copilot-sub {{
+    font-size: 13px !important;
+    line-height: 1.72 !important;
+}}
+.copilot-hint {{
+    font-size: 12px !important;
+    line-height: 1.72 !important;
+}}
+.home-section-title {{
+    font-size: 23px !important;
+    line-height: 1.28 !important;
+}}
+.home-stat-value {{
+    font-size: 24px !important;
+}}
+.home-stat-label {{
+    font-size: 12px !important;
+}}
+.stButton > button,
+.stDownloadButton > button,
+.stButton > button p,
+.stDownloadButton > button p {{
+    font-size: 14px !important;
+    line-height: 1.25 !important;
+}}
+.nav-panel .stButton > button,
+.nav-panel .stButton > button p {{
+    font-size: 12px !important;
+    line-height: 1.18 !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+}}
+.copilot-chip {{
+    font-size: 10.5px !important;
+}}
+.stTabs button[data-baseweb="tab"],
+.stTabs button[data-baseweb="tab"] p {{
+    font-size: 13px !important;
+}}
+
+/* Guided onboarding spotlight and floating coach card. */
+.onboarding-tour-target {{
+    position: relative !important;
+    z-index: 1000000 !important;
+    outline: 3px solid #14B8A6 !important;
+    outline-offset: 5px !important;
+    border-radius: 12px !important;
+    box-shadow:
+        0 0 0 7px rgba(20,184,166,0.14),
+        0 0 30px rgba(14,165,233,0.34) !important;
+    animation: onboardingTargetPulse 1.7s ease-in-out infinite !important;
+    scroll-margin: 110px !important;
+}}
+@keyframes onboardingTargetPulse {{
+    0%, 100% {{
+        outline-color: rgba(20,184,166,0.92);
+        box-shadow: 0 0 0 6px rgba(20,184,166,0.12), 0 0 24px rgba(14,165,233,0.24);
+    }}
+    50% {{
+        outline-color: rgba(34,211,238,1);
+        box-shadow: 0 0 0 10px rgba(34,211,238,0.08), 0 0 38px rgba(14,165,233,0.38);
+    }}
+}}
+.st-key-onboarding_coachmark {{
+    position: fixed !important;
+    top: 88px;
+    right: 24px;
+    width: min(370px, calc(100vw - 32px)) !important;
+    z-index: 1000002 !important;
+    padding: 18px 18px 16px !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 20px !important;
+    background: var(--card) !important;
+    color: var(--text) !important;
+    box-shadow: 0 24px 70px rgba(15,23,42,0.24) !important;
+    backdrop-filter: blur(18px) !important;
+}}
+.st-key-onboarding_coachmark [data-testid="stVerticalBlock"] {{
+    gap: 8px !important;
+}}
+.st-key-onboarding_coachmark h3 {{
+    margin: 0 !important;
+    font-size: 19px !important;
+}}
+.st-key-onboarding_coachmark p {{
+    margin: 0 !important;
+    font-size: 13px !important;
+    line-height: 1.65 !important;
+}}
+.st-key-onboarding_coachmark .stCaption {{
+    color: var(--accent) !important;
+    font-weight: 800 !important;
+}}
+.st-key-onboarding_coachmark .stButton > button {{
+    min-width: 0 !important;
+    min-height: 38px !important;
+    height: 38px !important;
+    padding: 0 12px !important;
+    font-size: 12px !important;
+}}
+@media (max-width: 720px) {{
+    .st-key-onboarding_coachmark {{
+        left: 12px !important;
+        right: 12px !important;
+        top: auto !important;
+        bottom: 14px !important;
+        width: auto !important;
+    }}
+}}
+
 </style>
 """,
         unsafe_allow_html=True,
@@ -1497,6 +1980,12 @@ def get_theme_cfg() -> Dict[str, str]:
 
 def style_plotly(fig):
     cfg = get_theme_cfg()
+    if st.session_state.theme_mode == "深色":
+        chart_colors = ["#22D3EE", "#38BDF8", "#2DD4BF", "#6366F1", "#14B8A6", "#60A5FA"]
+    elif st.session_state.theme_mode == "护眼":
+        chart_colors = ["#4F8174", "#658FA0", "#78A98E", "#7E8F72", "#6F8390", "#8AAE9A"]
+    else:
+        chart_colors = None
     fig.update_layout(
         template="plotly_dark" if st.session_state.theme_mode == "深色" else "plotly_white",
         paper_bgcolor=cfg["card"],
@@ -1505,7 +1994,7 @@ def style_plotly(fig):
         title=dict(font=dict(color=cfg["text"], size=18)),
         legend=dict(bgcolor="rgba(0,0,0,0)", borderwidth=0, font=dict(color=cfg["text"])),
         margin=dict(l=22, r=18, t=56, b=28),
-        colorway=["#22D3EE", "#38BDF8", "#2DD4BF", "#6366F1", "#14B8A6", "#60A5FA"] if st.session_state.theme_mode == "深色" else None,
+        colorway=chart_colors,
         hoverlabel=dict(
             bgcolor=cfg["card_alt"],
             bordercolor=cfg["line"],
@@ -1795,8 +2284,17 @@ def render_grouped_normalized_distribution(df: Optional[pd.DataFrame]) -> None:
 # =========================
 # 通用工具函数
 # =========================
+def rerun_prefer_fragment() -> None:
+    """Use a local rerun inside workspace fragments and fall back elsewhere."""
+    try:
+        st.rerun(scope="fragment")
+    except Exception:
+        st.rerun()
+
+
 def queue_prompt(text: str) -> None:
     st.session_state.pending_prompt = text
+    # Prompts can originate from the sidebar or center pane and must refresh chat.
     st.rerun()
 
 
@@ -1846,11 +2344,14 @@ def choose_final_sheet(sheet_names: List[str]) -> str:
     return sheet_names[-1]
 
 
+@st.cache_data(show_spinner=False, max_entries=4)
 def get_excel_sheet_names_from_bytes(file_bytes: bytes) -> List[str]:
     return pd.ExcelFile(io.BytesIO(file_bytes)).sheet_names
 
 
-def get_excel_sheet_names_from_path(path: str) -> List[str]:
+@st.cache_data(show_spinner=False, max_entries=8)
+def get_excel_sheet_names_from_path(path: str, file_mtime: float = 0.0) -> List[str]:
+    del file_mtime
     return pd.ExcelFile(path).sheet_names
 
 
@@ -2084,6 +2585,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+@st.cache_data(show_spinner=False, max_entries=4)
 def load_dataframe_from_bytes(file_bytes: bytes, file_name: str, sheet_name: Optional[str] = None) -> pd.DataFrame:
     if file_name.lower().endswith(".csv"):
         df = pd.read_csv(io.BytesIO(file_bytes))
@@ -2092,7 +2594,13 @@ def load_dataframe_from_bytes(file_bytes: bytes, file_name: str, sheet_name: Opt
     return clean_dataframe(df)
 
 
-def load_dataframe_from_path(path: str, sheet_name: Optional[str] = None) -> pd.DataFrame:
+@st.cache_data(show_spinner=False, max_entries=8)
+def load_dataframe_from_path(
+    path: str,
+    sheet_name: Optional[str] = None,
+    file_mtime: float = 0.0,
+) -> pd.DataFrame:
+    del file_mtime
     if path.lower().endswith(".csv"):
         df = pd.read_csv(path)
     else:
@@ -2220,6 +2728,17 @@ def _apply_auth_user(user: Any) -> bool:
 
 
 def sign_up_user(email: str, password: str, display_name: str = "") -> Tuple[bool, str]:
+    email = str(email or "").strip()
+    password = str(password or "")
+    display_name = str(display_name or "").strip()
+    if not email:
+        return False, "请填写邮箱。"
+    if "@" not in email:
+        return False, "邮箱格式不正确。"
+    if not password:
+        return False, "请填写密码。"
+    if len(password) < 6:
+        return False, "密码至少需要 6 位。"
     client_auth = get_supabase_auth_client()
     if client_auth is None:
         return False, "未配置 Supabase Auth。"
@@ -2423,12 +2942,14 @@ def add_pending_knowledge(
         except Exception:
             payload.pop("uploader_user_id", None)
             client_sb.table("knowledge_records").insert(payload).execute()
+        invalidate_knowledge_caches()
         return True
     except Exception as e:
         st.warning(f"提交知识片段失败：{e}")
         return False
 
 
+@st.cache_data(show_spinner=False, ttl=30, max_entries=12)
 def list_knowledge_records(status: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
     try:
         client_sb = get_supabase_client()
@@ -2471,6 +2992,7 @@ def update_knowledge_record(
             return True
         payload["updated_at"] = _now_str()
         client_sb.table("knowledge_records").update(payload).eq("id", int(record_id)).execute()
+        invalidate_knowledge_caches()
         return True
     except Exception as e:
         st.warning(f"更新知识记录失败：{e}")
@@ -2484,12 +3006,14 @@ def delete_knowledge_record(record_id: int) -> bool:
             st.warning("未配置 Supabase，公共知识库不可用。")
             return False
         client_sb.table("knowledge_records").delete().eq("id", int(record_id)).execute()
+        invalidate_knowledge_caches()
         return True
     except Exception as e:
         st.warning(f"删除知识记录失败：{e}")
         return False
 
 
+@st.cache_data(show_spinner=False, ttl=60, max_entries=1)
 def load_approved_knowledge_text() -> str:
     try:
         client_sb = get_supabase_client()
@@ -2510,23 +3034,25 @@ def load_approved_knowledge_text() -> str:
         return ""
 
 
+@st.cache_data(show_spinner=False, ttl=60, max_entries=1)
 def get_knowledge_stats() -> Dict[str, int]:
     stats = {"pending": 0, "approved": 0, "rejected": 0, "archived": 0, "approved_chars": 0}
     try:
         client_sb = get_supabase_client()
         if client_sb is None:
             return stats
-        for status in ["pending", "approved", "rejected", "archived"]:
-            response = client_sb.table("knowledge_records").select("id", count="exact").eq("status", status).limit(1).execute()
-            stats[status] = int(response.count or 0)
-        approved_response = (
+        response = (
             client_sb.table("knowledge_records")
-            .select("content_clean")
-            .eq("status", "approved")
+            .select("status,content_clean")
             .limit(5000)
             .execute()
         )
-        stats["approved_chars"] = sum(len(str(row.get("content_clean") or "")) for row in (approved_response.data or []))
+        for row in response.data or []:
+            status = str(row.get("status") or "")
+            if status in stats:
+                stats[status] += 1
+            if status == "approved":
+                stats["approved_chars"] += len(str(row.get("content_clean") or ""))
     except Exception:
         pass
     return stats
@@ -2536,6 +3062,19 @@ def get_session_id() -> str:
     if "session_id" not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
     return st.session_state.session_id
+
+
+@st.cache_resource(show_spinner=False)
+def get_usage_event_executor() -> ThreadPoolExecutor:
+    return ThreadPoolExecutor(max_workers=1, thread_name_prefix="usage-events")
+
+
+def _insert_usage_event(client_sb: Any, payload: Dict[str, Any]) -> bool:
+    try:
+        client_sb.table("usage_events").insert(payload).execute()
+        return True
+    except Exception:
+        return False
 
 
 def record_usage_event(event_type: str, page_name: str = "", detail: Optional[Dict[str, Any]] = None) -> bool:
@@ -2552,7 +3091,8 @@ def record_usage_event(event_type: str, page_name: str = "", detail: Optional[Di
         if st.session_state.get("user_id"):
             payload["detail"] = dict(payload["detail"])
             payload["detail"]["user_id"] = st.session_state.get("user_id")
-        client_sb.table("usage_events").insert(payload).execute()
+        # Usage tracking is best effort and must not block ordinary UI interactions.
+        get_usage_event_executor().submit(_insert_usage_event, client_sb, payload)
         return True
     except Exception:
         return False
@@ -2567,38 +3107,45 @@ def init_usage_tracking() -> None:
         st.session_state.usage_session_recorded = True
 
 
+@st.cache_data(show_spinner=False, ttl=60, max_entries=1)
 def get_usage_stats() -> Dict[str, Any]:
     stats: Dict[str, Any] = {"today_visits": "--", "total_visits": "--", "unique_sessions": "--"}
     try:
         client_sb = get_supabase_client()
         if client_sb is None:
             return stats
-        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-        total_resp = client_sb.table("usage_events").select("id", count="exact").eq("event_type", "session_start").limit(1).execute()
-        today_resp = (
+        response = (
             client_sb.table("usage_events")
-            .select("id", count="exact")
-            .eq("event_type", "session_start")
-            .gte("created_at", today_start)
-            .limit(1)
-            .execute()
-        )
-        sessions_resp = (
-            client_sb.table("usage_events")
-            .select("session_id")
+            .select("session_id,created_at")
             .eq("event_type", "session_start")
             .limit(10000)
             .execute()
         )
-        session_ids = {str(row.get("session_id")) for row in (sessions_resp.data or []) if row.get("session_id")}
-        stats["today_visits"] = int(today_resp.count or 0)
-        stats["total_visits"] = int(total_resp.count or 0)
+        rows = response.data or []
+        today = datetime.now().astimezone().date()
+        today_visits = 0
+        session_ids = set()
+        for row in rows:
+            session_id = row.get("session_id")
+            if session_id:
+                session_ids.add(str(session_id))
+            created_at = str(row.get("created_at") or "")
+            if created_at:
+                try:
+                    created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                    if created_dt.astimezone().date() == today:
+                        today_visits += 1
+                except ValueError:
+                    pass
+        stats["today_visits"] = today_visits
+        stats["total_visits"] = len(rows)
         stats["unique_sessions"] = len(session_ids)
     except Exception:
         pass
     return stats
 
 
+@st.cache_data(show_spinner=False, ttl=60, max_entries=1)
 def get_supabase_status() -> Dict[str, Any]:
     configured = bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
     client_sb = get_supabase_client() if configured else None
@@ -2622,6 +3169,20 @@ def get_supabase_status() -> Dict[str, Any]:
         "status_text": status_text,
         "stats": get_knowledge_stats(),
     }
+
+
+def invalidate_knowledge_caches() -> None:
+    """Refresh public knowledge reads after an administrator or uploader writes data."""
+    for cached_func in (
+        list_knowledge_records,
+        load_approved_knowledge_text,
+        get_knowledge_stats,
+        get_supabase_status,
+    ):
+        try:
+            cached_func.clear()
+        except Exception:
+            pass
 
 
 def render_sidebar_status_panel() -> None:
@@ -3786,6 +4347,16 @@ def render_landing_page() -> None:
     """Native Streamlit landing page; keeps routing reliable while using custom styling."""
     knowledge_stats = get_knowledge_stats()
     usage_stats = get_usage_stats()
+    hero_image_uri = ""
+    hero_image_path = os.path.join("assets", "rhdl_hero_nanodisc_v2.webp")
+    try:
+        with open(hero_image_path, "rb") as image_file:
+            hero_image_uri = (
+                "data:image/webp;base64,"
+                + base64.b64encode(image_file.read()).decode("ascii")
+            )
+    except OSError:
+        hero_image_uri = ""
     try:
         data_files = [
             p
@@ -3893,7 +4464,7 @@ def render_landing_page() -> None:
             letter-spacing: 0;
             margin: 0 0 22px;
             color: #082f49;
-            text-shadow: 0 0 30px rgba(103,232,249,0.32), 0 14px 42px rgba(0,0,0,0.55);
+            text-shadow: 0 10px 34px rgba(14,116,144,0.14);
         }
         .landing-subtitle-native {
             max-width: 760px;
@@ -3915,21 +4486,21 @@ def render_landing_page() -> None:
             border-radius: 44px;
             border: 1px solid rgba(14,165,233,0.20);
             background:
-                radial-gradient(circle at 50% 42%, rgba(34,211,238,0.38), transparent 24%),
-                radial-gradient(circle at 72% 20%, rgba(124,58,237,0.18), transparent 30%),
-                linear-gradient(150deg, rgba(255,255,255,0.94), rgba(224,242,254,0.68));
+                radial-gradient(circle at 50% 38%, rgba(45,212,191,0.18), transparent 30%),
+                radial-gradient(circle at 76% 18%, rgba(125,211,252,0.18), transparent 27%),
+                linear-gradient(150deg, rgba(255,255,255,0.96), rgba(236,250,252,0.86));
             overflow: hidden;
-            box-shadow: 0 44px 110px rgba(15,55,87,0.16), inset 0 1px 0 rgba(255,255,255,0.88);
+            box-shadow: 0 34px 90px rgba(15,55,87,0.13), inset 0 1px 0 rgba(255,255,255,0.92);
         }
         .landing-visual-native:before {
             content: "";
             position: absolute;
             inset: 0;
             background-image:
-                linear-gradient(rgba(14,165,233,0.12) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(14,165,233,0.12) 1px, transparent 1px);
-            background-size: 38px 38px;
-            mask-image: radial-gradient(circle at 50% 45%, black, transparent 76%);
+                linear-gradient(rgba(14,116,144,0.065) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(14,116,144,0.065) 1px, transparent 1px);
+            background-size: 34px 34px;
+            mask-image: radial-gradient(circle at 50% 44%, black, transparent 80%);
         }
         .landing-orbit-native,
         .landing-orbit-native.two {
@@ -3957,23 +4528,137 @@ def render_landing_page() -> None:
         .landing-node-native.b { right: 108px; top: 92px; background: #c084fc; }
         .landing-node-native.c { left: 136px; bottom: 134px; background: #5eead4; }
         .landing-node-native.d { right: 78px; bottom: 160px; background: #fbbf24; }
+        .landing-formulation-stage {
+            position: absolute;
+            inset: 18px 22px 108px;
+        }
+        .landing-viz-label {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 3;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 11px;
+            border: 1px solid rgba(14,116,144,0.14);
+            border-radius: 999px;
+            background: rgba(255,255,255,0.78);
+            color: #155e75;
+            font-size: 10px;
+            font-weight: 850;
+            letter-spacing: 0.08em;
+            box-shadow: 0 10px 30px rgba(14,116,144,0.08);
+        }
+        .landing-viz-label i {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #14b8a6;
+            box-shadow: 0 0 0 5px rgba(20,184,166,0.10);
+        }
+        .landing-rhdl-svg {
+            display: none;
+        }
+        .landing-rhdl-image {
+            position: absolute;
+            inset: 72px 0 2px;
+            width: 100%;
+            height: calc(100% - 74px);
+            object-fit: cover;
+            object-position: 58% center;
+            border-radius: 28px;
+            filter: saturate(0.90) contrast(1.02);
+            box-shadow: 0 18px 48px rgba(14,116,144,0.08);
+            animation: landingImageFloat 7s ease-in-out infinite;
+        }
+        @keyframes landingImageFloat {
+            0%, 100% { transform: translateY(2px) scale(0.992); }
+            50% { transform: translateY(-5px) scale(1); }
+        }
+        .landing-viz-caption {
+            position: absolute;
+            top: 45px;
+            left: 9px;
+            z-index: 3;
+            color: #527584;
+            font-size: 11px;
+            line-height: 1.4;
+            letter-spacing: 0.02em;
+        }
+        .landing-particle {
+            transform-origin: 260px 174px;
+            animation: landingParticleFloat 5.8s ease-in-out infinite;
+        }
+        .landing-lipid-heads {
+            transform-origin: 260px 174px;
+            animation: landingShellDrift 24s linear infinite;
+        }
+        .landing-apo-ribbon {
+            stroke-dasharray: 22 9;
+            animation: landingApoFlow 8s linear infinite;
+        }
+        .landing-cargo-dot {
+            transform-box: fill-box;
+            transform-origin: center;
+            animation: landingCargoPulse 2.8s ease-in-out infinite;
+        }
+        .landing-cargo-dot.delay-one { animation-delay: -0.9s; }
+        .landing-cargo-dot.delay-two { animation-delay: -1.8s; }
+        .landing-signal-line {
+            stroke-dasharray: 7 10;
+            animation: landingSignalFlow 4s linear infinite;
+        }
+        @keyframes landingParticleFloat {
+            0%, 100% { transform: translateY(2px) scale(1); }
+            50% { transform: translateY(-9px) scale(1.018); }
+        }
+        @keyframes landingShellDrift {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes landingApoFlow {
+            to { stroke-dashoffset: -124; }
+        }
+        @keyframes landingCargoPulse {
+            0%, 100% { transform: scale(0.86); opacity: 0.72; }
+            50% { transform: scale(1.16); opacity: 1; }
+        }
+        @keyframes landingSignalFlow {
+            to { stroke-dashoffset: -68; }
+        }
+        .landing-viz-tag {
+            display: none;
+            position: absolute;
+            z-index: 4;
+            padding: 7px 10px;
+            border: 1px solid rgba(14,116,144,0.13);
+            border-radius: 11px;
+            background: rgba(255,255,255,0.86);
+            color: #155e75;
+            font-size: 10px;
+            font-weight: 780;
+            box-shadow: 0 10px 30px rgba(15,55,87,0.08);
+            backdrop-filter: blur(10px);
+        }
+        .landing-viz-tag.apo { right: 4px; top: 76px; }
+        .landing-viz-tag.cargo { left: 3px; bottom: 42px; }
         .landing-ai-panel-native {
             position: absolute;
-            left: 34px;
-            right: 34px;
-            bottom: 32px;
-            padding: 22px;
-            border-radius: 26px;
-            background: rgba(255,255,255,0.72);
-            border: 1px solid rgba(14,165,233,0.18);
+            left: 24px;
+            right: 24px;
+            bottom: 18px;
+            padding: 12px 15px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.84);
+            border: 1px solid rgba(14,116,144,0.14);
             backdrop-filter: blur(22px);
-            box-shadow: 0 24px 70px rgba(15,55,87,0.12);
+            box-shadow: 0 22px 60px rgba(15,55,87,0.11);
         }
         .landing-ai-panel-title {
             color: #082f49;
-            font-size: 17px;
+            font-size: 12px;
             font-weight: 850;
-            margin-bottom: 16px;
+            margin-bottom: 8px;
         }
         .landing-bar-native {
             height: 11px;
@@ -3984,8 +4669,48 @@ def render_landing_page() -> None:
         }
         .landing-bar-native.two { width: 76%; opacity: 0.72; }
         .landing-bar-native.three { width: 58%; opacity: 0.54; }
+        .landing-profile-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 9px;
+        }
+        .landing-profile-item {
+            position: relative;
+            padding: 6px 7px;
+            border-radius: 11px;
+            background: linear-gradient(145deg, rgba(240,249,255,0.74), rgba(236,253,245,0.68));
+            text-align: center;
+        }
+        .landing-profile-item:not(:last-child):after {
+            content: "→";
+            position: absolute;
+            right: -9px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(14,116,144,0.42);
+            font-size: 12px;
+            z-index: 2;
+        }
+        .landing-profile-item strong {
+            display: block;
+            color: #0f4c5c;
+            font-size: 13px;
+            line-height: 1.15;
+        }
+        .landing-profile-item span {
+            display: block;
+            color: #5f7f8d;
+            font-size: 8px;
+            margin-top: 4px;
+            letter-spacing: 0.04em;
+        }
         .landing-section-native {
             margin-bottom: 88px;
+            animation: landingReveal 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        @keyframes landingReveal {
+            from { opacity: 0; transform: translateY(22px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         .landing-section-head-native {
             text-align: center;
@@ -4037,12 +4762,18 @@ def render_landing_page() -> None:
             min-height: 230px;
             padding: 24px;
             border-radius: 28px;
-            transition: transform 0.22s ease, box-shadow 0.22s ease;
+            transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
         }
         .landing-feature-native:hover {
             transform: translateY(-7px);
+            border-color: rgba(14,165,233,0.30);
             box-shadow: 0 32px 88px rgba(14,165,233,0.18), 0 22px 60px rgba(45,212,191,0.12);
         }
+        .landing-feature-native:nth-child(2) { animation-delay: 0.05s; }
+        .landing-feature-native:nth-child(3) { animation-delay: 0.10s; }
+        .landing-feature-native:nth-child(4) { animation-delay: 0.15s; }
+        .landing-feature-native:nth-child(5) { animation-delay: 0.20s; }
+        .landing-feature-native:nth-child(6) { animation-delay: 0.25s; }
         .landing-icon-native {
             width: 52px;
             height: 52px;
@@ -4081,16 +4812,92 @@ def render_landing_page() -> None:
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
             font-weight: 760;
             font-size: 14px;
+            transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+        }
+        .landing-chip-native:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(204,251,241,0.82));
+            box-shadow: 0 12px 28px rgba(14,116,144,0.10);
         }
         .landing-arch-native,
         .landing-cta-native {
             border-radius: 34px;
             padding: 34px;
         }
+        .landing-section-band-native {
+            position: relative;
+            overflow: hidden;
+            padding: 56px 38px 48px;
+            border: 1px solid rgba(99,102,241,0.12);
+            border-radius: 38px;
+            background:
+                radial-gradient(circle at 12% 18%, rgba(34,211,238,0.20), transparent 25%),
+                radial-gradient(circle at 86% 12%, rgba(129,140,248,0.18), transparent 28%),
+                linear-gradient(135deg, rgba(239,249,255,0.94), rgba(238,242,255,0.92));
+            box-shadow: 0 28px 80px rgba(30,64,175,0.09);
+        }
+        .landing-section-band-native .landing-arch-native {
+            padding: 8px 0 0;
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+            backdrop-filter: none;
+        }
+        .landing-section-dashboard-native {
+            position: relative;
+            overflow: hidden;
+            padding: 56px 38px 48px;
+            border-radius: 38px;
+            border: 1px solid rgba(125,172,194,0.20);
+            background:
+                radial-gradient(circle at 12% 6%, rgba(103,232,249,0.18), transparent 28%),
+                radial-gradient(circle at 88% 8%, rgba(165,180,252,0.16), transparent 30%),
+                linear-gradient(135deg, rgba(248,252,255,0.98), rgba(236,247,251,0.96) 52%, rgba(242,245,255,0.96));
+            box-shadow: 0 28px 78px rgba(15,55,87,0.10);
+        }
+        .landing-section-dashboard-native .landing-kicker-native {
+            color: #0e8799 !important;
+        }
+        .landing-section-dashboard-native .landing-section-head-native h2 {
+            color: #0b3148 !important;
+        }
+        .landing-section-dashboard-native .landing-stat-native {
+            border-color: rgba(125,172,194,0.20);
+            background: rgba(255,255,255,0.78);
+            box-shadow:
+                0 16px 38px rgba(15,55,87,0.07),
+                inset 0 1px 0 rgba(255,255,255,0.94);
+            backdrop-filter: blur(16px);
+        }
+        .landing-section-dashboard-native .landing-stat-native:hover {
+            background: rgba(255,255,255,0.96);
+            box-shadow: 0 21px 44px rgba(14,116,144,0.11);
+        }
+        .landing-section-dashboard-native .landing-stat-native strong {
+            background: none;
+            -webkit-background-clip: initial;
+            color: #0f6071 !important;
+        }
+        .landing-section-dashboard-native .landing-stat-native span {
+            color: #587485 !important;
+        }
+        .landing-section-workflow-native {
+            padding: 12px 0 6px;
+        }
+        .landing-section-workflow-native .landing-step-native:nth-child(2n) {
+            background: linear-gradient(145deg, rgba(238,242,255,0.82), rgba(255,255,255,0.74));
+        }
+        .landing-section-workflow-native .landing-step-native:nth-child(2n + 1) {
+            background: linear-gradient(145deg, rgba(236,253,245,0.82), rgba(255,255,255,0.74));
+        }
         .landing-stat-native {
             border-radius: 26px;
             padding: 22px;
             min-height: 132px;
+            transition: transform 0.20s ease, background 0.20s ease;
+        }
+        .landing-stat-native:hover {
+            transform: translateY(-4px);
         }
         .landing-stat-native strong {
             display: block;
@@ -4120,6 +4927,12 @@ def render_landing_page() -> None:
             display: grid;
             align-content: center;
             gap: 8px;
+            transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+        }
+        .landing-step-native:hover {
+            transform: translateY(-4px);
+            border-color: rgba(14,165,233,0.30);
+            background: rgba(255,255,255,0.90);
         }
         .landing-step-native b {
             color: #0e7490;
@@ -4155,28 +4968,74 @@ def render_landing_page() -> None:
             min-width: 136px !important;
             height: 52px !important;
             padding: 0 22px !important;
-            border: 0 !important;
+            border: 1px solid rgba(14,116,144,0.18) !important;
             border-radius: 16px !important;
-            color: #ffffff !important;
+            color: #124e60 !important;
             font-size: 15px !important;
             font-weight: 820 !important;
-            background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 52%, #ff4ecd 100%) !important;
-            box-shadow: 0 16px 42px rgba(14,165,233,0.24), 0 0 0 1px rgba(255,255,255,0.46) inset !important;
+            background: linear-gradient(135deg, rgba(239,249,255,0.96), rgba(236,253,245,0.94)) !important;
+            box-shadow: 0 12px 30px rgba(15,55,87,0.09), inset 0 1px 0 rgba(255,255,255,0.90) !important;
             transition: transform 0.18s ease, box-shadow 0.18s ease !important;
         }
         .stButton > button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 22px 54px rgba(14,165,233,0.24), 0 0 36px rgba(45,212,191,0.18) !important;
+            transform: translateY(-2px);
+            color: #0e5b6d !important;
+            border-color: rgba(14,116,144,0.28) !important;
+            box-shadow: 0 17px 38px rgba(15,55,87,0.13), 0 0 24px rgba(45,212,191,0.10) !important;
+        }
+        .stButton > button:active {
+            transform: translateY(0) scale(0.985);
+            box-shadow: 0 8px 20px rgba(15,55,87,0.10) !important;
+        }
+        .stButton > button:focus-visible {
+            outline: 3px solid rgba(14,165,233,0.22) !important;
+            outline-offset: 3px !important;
+        }
+        div[class*="st-key-landing_native_enter_workspace"] button,
+        div[class*="st-key-landing_native_bottom_workspace"] button {
+            color: #0b4f5c !important;
+            border-color: rgba(20,184,166,0.24) !important;
+            background: linear-gradient(135deg, #dff7f5 0%, #dff3fb 100%) !important;
+        }
+        div[class*="st-key-landing_native_register"] button,
+        div[class*="st-key-landing_native_bottom_register"] button {
+            color: #1e5370 !important;
+            border-color: rgba(56,189,248,0.22) !important;
+            background: linear-gradient(135deg, #eaf6ff 0%, #edf2ff 100%) !important;
+        }
+        div[class*="st-key-landing_native_login"] button,
+        div[class*="st-key-landing_native_bottom_login"] button {
+            color: #496477 !important;
+            border-color: rgba(100,116,139,0.18) !important;
+            background: rgba(255,255,255,0.76) !important;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
         }
         @media (max-width: 980px) {
             .landing-hero-native { grid-template-columns: 1fr; min-height: auto; }
             .landing-visual-native { min-height: 430px; }
+            .landing-section-band-native,
+            .landing-section-dashboard-native { padding: 44px 24px 38px; }
         }
         @media (max-width: 640px) {
             .main .block-container { padding: 18px 14px 54px !important; }
             .landing-nav-native { align-items: flex-start; flex-direction: column; }
             .landing-title-native { font-size: clamp(42px, 14vw, 64px); }
             .landing-visual-native { min-height: 380px; border-radius: 32px; }
+            .landing-formulation-stage { inset: 14px 14px 102px; }
+            .landing-ai-panel-native { left: 14px; right: 14px; bottom: 14px; }
+            .landing-profile-item strong { font-size: 11px; }
+            .landing-profile-item span { display: none; }
+            .landing-section-band-native,
+            .landing-section-dashboard-native { padding: 38px 18px 32px; border-radius: 28px; }
             .stButton > button { width: 100% !important; }
         }
         </style>
@@ -4189,9 +5048,9 @@ def render_landing_page() -> None:
         <div class="landing-nav-native">
             <div class="landing-brand-native">
                 <span class="landing-brand-mark"></span>
-                <span>rHDL AI Research Platform</span>
+                <span>仿生 rHDL 纳米制剂开发助手</span>
             </div>
-            <div class="landing-nav-links">平台能力 · 技术架构 · 模型推荐 · AI 实验助手</div>
+            <div class="landing-nav-links">平台能力 · 技术架构 · 处方推荐 · 实验助手</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -4201,7 +5060,7 @@ def render_landing_page() -> None:
     with hero_left:
         st.markdown(
             """
-            <div class="landing-eyebrow-native"><span class="landing-pulse-native"></span>AI + Nanomedicine Formulation Intelligence</div>
+            <div class="landing-eyebrow-native"><span class="landing-pulse-native"></span>AI 驱动的纳米制剂研发工作台</div>
             <h1 class="landing-title-native">AI 纳米制剂研发平台</h1>
             <p class="landing-subtitle-native">面向 rHDL / 纳米递送 / 文献知识库 / 机器学习反向处方设计的智能科研工作台。</p>
             <p class="landing-caption-native">将文献解析、公共知识库、CatBoost 正向预测、Optuna 与 Pareto 多目标搜索、实验问题诊断串联成可复用的研发闭环。</p>
@@ -4223,19 +5082,71 @@ def render_landing_page() -> None:
                 st.rerun()
     with hero_right:
         st.markdown(
-            """
+            f"""
             <div class="landing-visual-native">
-                <div class="landing-orbit-native"></div>
-                <div class="landing-orbit-native two"></div>
-                <div class="landing-node-native a"></div>
-                <div class="landing-node-native b"></div>
-                <div class="landing-node-native c"></div>
-                <div class="landing-node-native d"></div>
+                <div class="landing-formulation-stage">
+                    <div class="landing-viz-label"><i></i>仿生 rHDL 纳米递送结构</div>
+                    <div class="landing-viz-caption">仿生脂质结构 · ApoA-I 骨架 · 药物载荷</div>
+                    <img class="landing-rhdl-image" src="{hero_image_uri}" alt="rHDL nanodisc formulation structure"/>
+                    <svg class="landing-rhdl-svg" viewBox="0 0 520 360" role="img" aria-label="Animated rHDL nanoparticle formulation">
+                        <defs>
+                            <radialGradient id="rhdlCore" cx="42%" cy="36%" r="68%">
+                                <stop offset="0%" stop-color="#ecfeff"/>
+                                <stop offset="42%" stop-color="#a5f3fc"/>
+                                <stop offset="76%" stop-color="#5eead4"/>
+                                <stop offset="100%" stop-color="#0e7490"/>
+                            </radialGradient>
+                            <linearGradient id="apoRibbon" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#38bdf8"/>
+                                <stop offset="52%" stop-color="#14b8a6"/>
+                                <stop offset="100%" stop-color="#818cf8"/>
+                            </linearGradient>
+                            <linearGradient id="signalPath" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#67e8f9" stop-opacity="0"/>
+                                <stop offset="55%" stop-color="#0ea5e9"/>
+                                <stop offset="100%" stop-color="#14b8a6" stop-opacity="0"/>
+                            </linearGradient>
+                            <filter id="rhdlGlow" x="-60%" y="-60%" width="220%" height="220%">
+                                <feGaussianBlur stdDeviation="10" result="blur"/>
+                                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                            </filter>
+                        </defs>
+                        <path class="landing-signal-line" d="M32 245 C108 206 132 258 186 224" fill="none" stroke="url(#signalPath)" stroke-width="2"/>
+                        <path class="landing-signal-line" d="M336 102 C402 58 442 90 492 54" fill="none" stroke="url(#signalPath)" stroke-width="2"/>
+                        <g class="landing-particle">
+                            <circle cx="260" cy="174" r="122" fill="#67e8f9" opacity="0.10" filter="url(#rhdlGlow)"/>
+                            <circle cx="260" cy="174" r="98" fill="url(#rhdlCore)" opacity="0.90"/>
+                            <circle cx="260" cy="174" r="82" fill="none" stroke="#ecfeff" stroke-width="2" opacity="0.80"/>
+                            <g class="landing-lipid-heads" fill="#f8fdff" stroke="#0e7490" stroke-width="2">
+                                <circle cx="260" cy="65" r="8"/><circle cx="302" cy="74" r="8"/>
+                                <circle cx="337" cy="99" r="8"/><circle cx="362" cy="134" r="8"/>
+                                <circle cx="369" cy="176" r="8"/><circle cx="360" cy="218" r="8"/>
+                                <circle cx="336" cy="252" r="8"/><circle cx="302" cy="276" r="8"/>
+                                <circle cx="260" cy="283" r="8"/><circle cx="218" cy="276" r="8"/>
+                                <circle cx="184" cy="252" r="8"/><circle cx="160" cy="218" r="8"/>
+                                <circle cx="151" cy="176" r="8"/><circle cx="158" cy="134" r="8"/>
+                                <circle cx="183" cy="99" r="8"/><circle cx="218" cy="74" r="8"/>
+                            </g>
+                            <path class="landing-apo-ribbon" d="M169 111 C205 52 318 44 357 112 C394 176 360 269 281 284 C198 300 132 230 154 155" fill="none" stroke="url(#apoRibbon)" stroke-width="10" stroke-linecap="round"/>
+                            <g fill="#0e7490">
+                                <circle class="landing-cargo-dot" cx="232" cy="153" r="10"/>
+                                <circle class="landing-cargo-dot delay-one" cx="284" cy="138" r="8"/>
+                                <circle class="landing-cargo-dot delay-two" cx="288" cy="198" r="12"/>
+                                <circle class="landing-cargo-dot delay-one" cx="236" cy="210" r="7"/>
+                            </g>
+                            <path d="M222 176 L248 154 L281 168 L295 205 L248 216 Z" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.76"/>
+                        </g>
+                    </svg>
+                    <div class="landing-viz-tag apo">ApoA-I scaffold</div>
+                    <div class="landing-viz-tag cargo">Drug cargo core</div>
+                </div>
                 <div class="landing-ai-panel-native">
-                    <div class="landing-ai-panel-title">Reverse formulation search · AD confidence 0.86</div>
-                    <div class="landing-bar-native"></div>
-                    <div class="landing-bar-native two"></div>
-                    <div class="landing-bar-native three"></div>
+                    <div class="landing-ai-panel-title">从研究证据到候选处方</div>
+                    <div class="landing-profile-grid">
+                        <div class="landing-profile-item"><strong>文献证据</strong><span>数据基础</span></div>
+                        <div class="landing-profile-item"><strong>正向预测</strong><span>CatBoost</span></div>
+                        <div class="landing-profile-item"><strong>反向搜索</strong><span>Optuna / Pareto</span></div>
+                    </div>
                 </div>
             </div>
             """,
@@ -4246,7 +5157,7 @@ def render_landing_page() -> None:
         """
         <section class="landing-section-native">
             <div class="landing-section-head-native">
-                <div class="landing-kicker-native">Core Capabilities</div>
+                <div class="landing-kicker-native">核心能力</div>
                 <h2>从文献证据到候选处方，一站式推进</h2>
                 <p>不是单点工具堆叠，而是围绕纳米制剂研发流程组织的智能工作台。</p>
             </div>
@@ -4259,9 +5170,9 @@ def render_landing_page() -> None:
                 <article class="landing-feature-native"><div class="landing-icon-native">✺</div><h3>AI 实验助手</h3><p>辅助分析沉淀、粒径异常、PDI 偏高等实验问题，给出排查路径。</p></article>
             </div>
         </section>
-        <section class="landing-section-native">
+        <section class="landing-section-native landing-section-band-native">
             <div class="landing-section-head-native">
-                <div class="landing-kicker-native">Architecture</div>
+                <div class="landing-kicker-native">技术架构</div>
                 <h2>面向科研产品化的技术底座</h2>
             </div>
             <div class="landing-arch-native">
@@ -4278,9 +5189,9 @@ def render_landing_page() -> None:
 
     st.markdown(
         f"""
-        <section class="landing-section-native">
+        <section class="landing-section-native landing-section-dashboard-native">
             <div class="landing-section-head-native">
-                <div class="landing-kicker-native">Live Dashboard</div>
+                <div class="landing-kicker-native">平台状态</div>
                 <h2>平台状态一眼可见</h2>
             </div>
             <div class="landing-stat-grid-native">
@@ -4297,9 +5208,9 @@ def render_landing_page() -> None:
 
     st.markdown(
         """
-        <section class="landing-section-native">
+        <section class="landing-section-native landing-section-workflow-native">
             <div class="landing-section-head-native">
-                <div class="landing-kicker-native">Workflow</div>
+                <div class="landing-kicker-native">研发流程</div>
                 <h2>把研发流程压缩成清晰闭环</h2>
             </div>
             <div class="landing-workflow-native">
@@ -5099,7 +6010,13 @@ def render_login_page() -> None:
     st.markdown("## 登录")
     st.caption("使用 Supabase Auth 登录后进入功能工作台。")
     email = st.text_input("邮箱", key="login_email_input")
-    password = st.text_input("密码", type="password", key="login_password_input")
+    password = st.text_input(
+        "??",
+        type="password",
+        placeholder="???6???",
+        help="???6???",
+        key="login_password_input",
+    )
     c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("登录", use_container_width=True, type="primary", key="login_submit_btn"):
@@ -5125,11 +6042,27 @@ def render_register_page() -> None:
     st.caption("注册后可创建项目、保存推荐历史和报告。")
     display_name = st.text_input("显示名称", key="register_display_name_input")
     email = st.text_input("邮箱", key="register_email_input")
-    password = st.text_input("密码", type="password", key="register_password_input")
-    password2 = st.text_input("确认密码", type="password", key="register_password_confirm_input")
+    password = st.text_input(
+        "??",
+        type="password",
+        placeholder="???6???",
+        help="???6???",
+        key="register_password_input",
+    )
+    password2 = st.text_input(
+        "????",
+        type="password",
+        placeholder="?????6???",
+        help="???6???",
+        key="register_password_confirm_input",
+    )
     c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("注册", use_container_width=True, type="primary", key="register_submit_btn"):
+            display_name = st.session_state.get("register_display_name_input", display_name)
+            email = st.session_state.get("register_email_input", email)
+            password = st.session_state.get("register_password_input", password)
+            password2 = st.session_state.get("register_password_confirm_input", password2)
             if password != password2:
                 st.error("两次输入的密码不一致。")
             else:
@@ -5275,17 +6208,26 @@ def render_sidebar() -> None:
 
         st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
         st.markdown('<div class="sidebar-title">🎨 主题设置</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sidebar-desc">可在浅色与深色主题之间自由切换。</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-desc">可在浅色、护眼与深色主题之间自由切换。</div>', unsafe_allow_html=True)
+        theme_options = ["浅色", "护眼", "深色"]
+        current_theme = st.session_state.get("theme_mode", "浅色")
         theme_value = st.radio(
             "选择主题",
-            ["浅色", "深色"],
-            index=0 if st.session_state.theme_mode == "浅色" else 1,
+            theme_options,
+            index=theme_options.index(current_theme) if current_theme in theme_options else 0,
             horizontal=True,
             key="sidebar_theme_radio",
             label_visibility="collapsed",
         )
         if theme_value != st.session_state.theme_mode:
             st.session_state.theme_mode = theme_value
+            st.rerun()
+        if st.button("打开新手教程", use_container_width=True, key="sidebar_open_onboarding_btn"):
+            st.session_state.onboarding_prompt_shown = True
+            st.session_state.onboarding_completed = False
+            st.session_state.onboarding_active = True
+            st.session_state.onboarding_step = 0
+            st.session_state.active_page = "首页概览"
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -5325,13 +6267,24 @@ def render_sidebar() -> None:
             key="sidebar_db_file_uploader",
         )
         if db_file is not None:
-            st.session_state.db_file_bytes = db_file.getvalue()
-            st.session_state.db_file_name = db_file.name
+            uploaded_bytes = db_file.getvalue()
+            if (
+                st.session_state.db_file_name != db_file.name
+                or st.session_state.db_file_bytes != uploaded_bytes
+            ):
+                st.session_state.db_file_bytes = uploaded_bytes
+                st.session_state.db_file_name = db_file.name
+                st.session_state.db_sheet_name = None
+                st.session_state.active_df = None
+                st.session_state._active_db_fingerprint = None
 
         if st.button("清除已上传数据库", use_container_width=True, key="sidebar_clear_uploaded_db_btn"):
             st.session_state.db_file_bytes = None
             st.session_state.db_file_name = None
             st.session_state.db_sheet_name = None
+            st.session_state.active_df = None
+            st.session_state.active_db_name = "未加载"
+            st.session_state._active_db_fingerprint = None
             st.rerun()
 
         if st.session_state.db_sheet_name:
@@ -5418,38 +6371,71 @@ def render_sidebar() -> None:
 def load_active_database() -> Tuple[Optional[pd.DataFrame], str]:
     df_main = None
     current_db_name = "未加载"
+    fingerprint: Any = ("none",)
 
     try:
         if st.session_state.db_file_bytes is not None and st.session_state.db_file_name:
             db_name = st.session_state.db_file_name
             current_db_name = db_name
+            file_bytes = st.session_state.db_file_bytes
+            content_hash = hashlib.sha256(file_bytes).hexdigest()
 
             if db_name.lower().endswith(".xlsx"):
-                sheet_names = get_excel_sheet_names_from_bytes(st.session_state.db_file_bytes)
+                sheet_names = get_excel_sheet_names_from_bytes(file_bytes)
                 chosen_sheet = choose_final_sheet(sheet_names)
                 st.session_state.db_sheet_name = chosen_sheet
-                df_main = load_dataframe_from_bytes(st.session_state.db_file_bytes, st.session_state.db_file_name, sheet_name=chosen_sheet)
+                fingerprint = ("upload", db_name, len(file_bytes), content_hash, chosen_sheet)
             else:
                 st.session_state.db_sheet_name = "最终版"
-                df_main = load_dataframe_from_bytes(st.session_state.db_file_bytes, st.session_state.db_file_name)
+                chosen_sheet = None
+                fingerprint = ("upload", db_name, len(file_bytes), content_hash, None)
+
+            if (
+                st.session_state.get("_active_db_fingerprint") == fingerprint
+                and isinstance(st.session_state.get("active_df"), pd.DataFrame)
+            ):
+                return st.session_state.active_df, current_db_name
+
+            df_main = load_dataframe_from_bytes(file_bytes, db_name, sheet_name=chosen_sheet)
         else:
             local_path = find_local_db_path()
             if local_path:
                 current_db_name = os.path.basename(local_path)
+                file_mtime = os.path.getmtime(local_path)
+                file_size = os.path.getsize(local_path)
                 if local_path.lower().endswith(".xlsx"):
-                    sheet_names = get_excel_sheet_names_from_path(local_path)
+                    sheet_names = get_excel_sheet_names_from_path(local_path, file_mtime=file_mtime)
                     chosen_sheet = choose_final_sheet(sheet_names)
                     st.session_state.db_sheet_name = chosen_sheet
-                    df_main = load_dataframe_from_path(local_path, sheet_name=chosen_sheet)
                 else:
                     st.session_state.db_sheet_name = "最终版"
-                    df_main = load_dataframe_from_path(local_path)
+                    chosen_sheet = None
+
+                fingerprint = (
+                    "path",
+                    os.path.abspath(local_path),
+                    file_mtime,
+                    file_size,
+                    chosen_sheet,
+                )
+                if (
+                    st.session_state.get("_active_db_fingerprint") == fingerprint
+                    and isinstance(st.session_state.get("active_df"), pd.DataFrame)
+                ):
+                    return st.session_state.active_df, current_db_name
+
+                df_main = load_dataframe_from_path(
+                    local_path,
+                    sheet_name=chosen_sheet,
+                    file_mtime=file_mtime,
+                )
     except Exception as e:
         st.warning(f"数据库加载失败：{e}")
         df_main = None
 
     st.session_state.active_df = df_main
     st.session_state.active_db_name = current_db_name
+    st.session_state._active_db_fingerprint = fingerprint
     return df_main, current_db_name
 
 
@@ -7314,7 +8300,7 @@ def get_home_metrics(df_main: Optional[pd.DataFrame]) -> List[Tuple[str, Any]]:
 
 def switch_page(page_name: str) -> None:
     st.session_state.active_page = page_name
-    st.rerun()
+    rerun_prefer_fragment()
 
 
 def render_module_header(title: str, subtitle: str) -> None:
@@ -7424,8 +8410,18 @@ def render_literature_page(df_main: Optional[pd.DataFrame]) -> None:
         "用于阅读文献、提炼研究重点、解析处方/工艺字段，并查看文献数据库的整体分布图表。",
     )
 
-    tabs = st.tabs(["📖 文献重点提炼", "📊 文献数据库可视化"])
-    with tabs[0]:
+    literature_view = st.segmented_control(
+        "文献解析视图",
+        options=["📖 文献重点提炼", "📊 文献数据库可视化"],
+        default="📖 文献重点提炼",
+        key="literature_view_segmented",
+        label_visibility="collapsed",
+    )
+    if literature_view == "📊 文献数据库可视化":
+        st.markdown("#### 文献数据库可视化")
+        st.caption("这里保留原“总览看板”的所有可视化图表，包括分类分布、粒径/包封率分布、粒径-PDI散点图和同类指标合并后的归一化分布图。")
+        render_overview_tab(df_main)
+    else:
         st.markdown("#### 文献内容输入")
         lit_text = st.text_area(
             "粘贴文献摘要、方法部分或实验描述",
@@ -7461,11 +8457,6 @@ def render_literature_page(df_main: Optional[pd.DataFrame]) -> None:
             ]
         )
         safe_dataframe(template_df, use_container_width=True, height=210)
-
-    with tabs[1]:
-        st.markdown("#### 文献数据库可视化")
-        st.caption("这里保留原“总览看板”的所有可视化图表，包括分类分布、粒径/包封率分布、粒径-PDI散点图和同类指标合并后的归一化分布图。")
-        render_overview_tab(df_main)
 
 
 def render_formulation_design_page() -> None:
@@ -7797,30 +8788,38 @@ def render_page_navigation() -> str:
 
     return st.session_state.active_page
 
+@st.fragment
+def render_workspace_content(df_main: Optional[pd.DataFrame]) -> None:
+    selected_page = render_page_navigation()
+    if selected_page == "首页概览":
+        render_home_page(df_main)
+    elif selected_page == "文献解析中心":
+        render_literature_page(df_main)
+    elif selected_page == "rHDL纳米制剂处方设计":
+        render_formulation_design_page()
+    elif selected_page == "rHDL纳米制剂处方预测":
+        render_formulation_prediction_page(df_main)
+    elif selected_page == "实验小助手":
+        render_lab_assistant_page(df_main)
+    elif selected_page == "我的空间":
+        render_profile_page()
+    elif selected_page == "管理后台":
+        render_admin_page()
+    else:
+        render_home_page(df_main)
+
+
+@st.fragment
+def render_workspace_chat() -> None:
+    render_chat_panel()
+
+
 def render_main_area(df_main: Optional[pd.DataFrame]) -> None:
     left_col, right_col = st.columns([3.9, 2.9], gap="large")
-
     with left_col:
-        selected_page = render_page_navigation()
-        if selected_page == "首页概览":
-            render_home_page(df_main)
-        elif selected_page == "文献解析中心":
-            render_literature_page(df_main)
-        elif selected_page == "rHDL纳米制剂处方设计":
-            render_formulation_design_page()
-        elif selected_page == "rHDL纳米制剂处方预测":
-            render_formulation_prediction_page(df_main)
-        elif selected_page == "实验小助手":
-            render_lab_assistant_page(df_main)
-        elif selected_page == "我的空间":
-            render_profile_page()
-        elif selected_page == "管理后台":
-            render_admin_page()
-        else:
-            render_home_page(df_main)
-
+        render_workspace_content(df_main)
     with right_col:
-        render_chat_panel()
+        render_workspace_chat()
 
 
 def render_chat_panel() -> None:
@@ -7916,7 +8915,7 @@ def render_chat_panel() -> None:
 
     if clear_btn:
         st.session_state.messages = []
-        st.rerun()
+        rerun_prefer_fragment()
 
     prompt_to_run = None
     if send_btn and user_text.strip():
@@ -7934,16 +8933,254 @@ def render_chat_panel() -> None:
             status.update(label="处理完成", state="complete", expanded=False)
 
         st.session_state.messages.append({"role": "assistant", "content": answer, "tool_logs": tool_logs})
-        st.rerun()
+        rerun_prefer_fragment()
 
     auto_scroll_chat()
 
 
+ONBOARDING_STEPS: List[Dict[str, str]] = [
+    {
+        "title": "设置当前项目",
+        "description": "先在左侧填写项目名称、项目类型和简介。后续的数据分析、推荐结果与报告都会围绕当前项目组织。",
+        "selector": ".st-key-sidebar_project_name_input input",
+        "page": "首页概览",
+    },
+    {
+        "title": "上传文献数据库",
+        "description": "在这里上传 Excel 或 CSV 文献数据库。平台会读取配方、工艺参数和 Size、PDI、EE 等结果字段。",
+        "selector": ".st-key-sidebar_db_file_uploader [data-testid='stFileUploaderDropzone']",
+        "page": "首页概览",
+    },
+    {
+        "title": "文献解析中心",
+        "description": "进入文献解析中心，可从摘要、Methods 或实验描述中提炼重点、处方字段和可引用摘要。",
+        "selector": ".st-key-main_nav_button_1 button",
+        "page": "文献解析中心",
+    },
+    {
+        "title": "处方设计",
+        "description": "输入期望的粒径、PDI、EE 等目标，由 CatBoost 正向模型结合 Optuna 或 Pareto 搜索候选处方。",
+        "selector": ".st-key-main_nav_button_2 button",
+        "page": "rHDL纳米制剂处方设计",
+    },
+    {
+        "title": "处方预测",
+        "description": "当你已经有一套配方时，可在这里输入配方与工艺参数，预测 Size、PDI、EE、DL 和 flux。",
+        "selector": ".st-key-main_nav_button_3 button",
+        "page": "rHDL纳米制剂处方预测",
+    },
+    {
+        "title": "实验小助手",
+        "description": "用于辅助排查沉淀、粒径异常、PDI 偏高和包封率不足等实验问题，并生成建议和 SOP。",
+        "selector": ".st-key-main_nav_button_4 button",
+        "page": "实验小助手",
+    },
+    {
+        "title": "智能体聊天区",
+        "description": "在右侧输入问题，智能体可以结合知识库、文献数据库和模型工具完成检索、解释与分析。",
+        "selector": ".st-key-right_chat_input_textarea textarea",
+        "page": "实验小助手",
+    },
+    {
+        "title": "保存到我的空间",
+        "description": "登录后可在我的空间长期保存项目、推荐历史和报告。游客仍可体验主要分析与推荐功能。",
+        "selector": ".st-key-main_nav_button_5 button",
+        "page": "我的空间",
+    },
+]
+
+
+@st.dialog("欢迎使用仿生 rHDL 纳米制剂开发助手")
+def render_onboarding_prompt() -> None:
+    st.markdown(
+        """
+        用大约 1 分钟了解项目设置、文献解析、处方设计、处方预测和智能体聊天区。
+        教程会自动定位并框出对应功能，过程中可以随时退出。
+        """
+    )
+    if st.button(
+        "开始新手教程",
+        type="primary",
+        use_container_width=True,
+        key="onboarding_prompt_start_btn",
+    ):
+        st.session_state.onboarding_prompt_shown = True
+        st.session_state.onboarding_completed = False
+        st.session_state.onboarding_active = True
+        st.session_state.onboarding_step = 0
+        st.session_state.active_page = "首页概览"
+        st.rerun()
+    if st.button(
+        "稍后再看",
+        use_container_width=True,
+        key="onboarding_prompt_later_btn",
+    ):
+        st.session_state.onboarding_prompt_shown = True
+        st.session_state.onboarding_active = False
+        st.rerun()
+    if st.button(
+        "跳过教程",
+        use_container_width=True,
+        key="onboarding_prompt_skip_btn",
+    ):
+        st.session_state.onboarding_prompt_shown = True
+        st.session_state.onboarding_active = False
+        st.session_state.onboarding_completed = True
+        st.rerun()
+
+
+def prepare_onboarding_page() -> None:
+    """Switch to the page required by the active tour step before rendering."""
+    if not st.session_state.get("onboarding_active"):
+        return
+    step_index = int(st.session_state.get("onboarding_step", 0))
+    step_index = max(0, min(step_index, len(ONBOARDING_STEPS) - 1))
+    st.session_state.onboarding_step = step_index
+    target_page = ONBOARDING_STEPS[step_index].get("page")
+    if target_page:
+        st.session_state.active_page = target_page
+
+
+def clear_onboarding_highlight() -> None:
+    components.html(
+        """
+        <script>
+        try {
+            const doc = window.parent.document;
+            doc.querySelectorAll(".onboarding-tour-target").forEach((element) => {
+                element.classList.remove("onboarding-tour-target");
+            });
+        } catch (error) {
+            // The tutorial remains usable even if parent-DOM highlighting is unavailable.
+        }
+        </script>
+        """,
+        height=0,
+    )
+
+
+def render_onboarding_target(selector: str) -> None:
+    selector_json = json.dumps(selector, ensure_ascii=False)
+    script = """
+        <script>
+        try {
+            const hostWindow = window.parent;
+            const doc = hostWindow.document;
+            const selector = TARGET_SELECTOR;
+            doc.querySelectorAll(".onboarding-tour-target").forEach((element) => {
+                element.classList.remove("onboarding-tour-target");
+            });
+
+            const target = doc.querySelector(selector);
+            const coach = doc.querySelector(".st-key-onboarding_coachmark");
+            if (target) {
+                target.classList.add("onboarding-tour-target");
+
+                const placeCoach = () => {
+                    if (!coach) return;
+                    const targetRect = target.getBoundingClientRect();
+                    const coachRect = coach.getBoundingClientRect();
+                    const gap = 18;
+                    const margin = 14;
+                    let left = targetRect.right + gap;
+                    if (left + coachRect.width > hostWindow.innerWidth - margin) {
+                        left = targetRect.left - coachRect.width - gap;
+                    }
+                    if (left < margin) {
+                        left = Math.min(
+                            hostWindow.innerWidth - coachRect.width - margin,
+                            Math.max(margin, targetRect.left)
+                        );
+                    }
+                    let top = targetRect.top;
+                    if (top + coachRect.height > hostWindow.innerHeight - margin) {
+                        top = hostWindow.innerHeight - coachRect.height - margin;
+                    }
+                    top = Math.max(70, top);
+                    coach.style.left = `${left}px`;
+                    coach.style.top = `${top}px`;
+                    coach.style.right = "auto";
+                    coach.style.bottom = "auto";
+                };
+
+                target.scrollIntoView({behavior: "smooth", block: "center", inline: "center"});
+                hostWindow.setTimeout(placeCoach, 420);
+                hostWindow.setTimeout(placeCoach, 900);
+            }
+        } catch (error) {
+            // Keep the native tutorial controls available if highlighting is blocked.
+        }
+        </script>
+    """.replace("TARGET_SELECTOR", selector_json)
+    components.html(script, height=0)
+
+
+def render_onboarding_tour() -> None:
+    if not st.session_state.get("onboarding_active"):
+        clear_onboarding_highlight()
+        return
+
+    step_index = int(st.session_state.get("onboarding_step", 0))
+    step_index = max(0, min(step_index, len(ONBOARDING_STEPS) - 1))
+    step = ONBOARDING_STEPS[step_index]
+
+    with st.container(key="onboarding_coachmark"):
+        st.caption(f"新手教程 · {step_index + 1} / {len(ONBOARDING_STEPS)}")
+        st.markdown(f"### {step['title']}")
+        st.write(step["description"])
+        st.progress((step_index + 1) / len(ONBOARDING_STEPS))
+
+        previous_col, next_col, exit_col = st.columns([1, 1.15, 1])
+        if previous_col.button(
+            "上一步",
+            disabled=step_index == 0,
+            use_container_width=True,
+            key="onboarding_previous_btn",
+        ):
+            st.session_state.onboarding_step = max(0, step_index - 1)
+            st.rerun()
+
+        next_label = "完成教程" if step_index == len(ONBOARDING_STEPS) - 1 else "下一步"
+        if next_col.button(
+            next_label,
+            type="primary",
+            use_container_width=True,
+            key="onboarding_next_btn",
+        ):
+            if step_index >= len(ONBOARDING_STEPS) - 1:
+                st.session_state.onboarding_active = False
+                st.session_state.onboarding_completed = True
+            else:
+                st.session_state.onboarding_step = step_index + 1
+            st.rerun()
+
+        if exit_col.button(
+            "退出",
+            use_container_width=True,
+            key="onboarding_exit_btn",
+        ):
+            st.session_state.onboarding_active = False
+            st.session_state.onboarding_completed = True
+            st.rerun()
+
+    render_onboarding_target(step["selector"])
+
+
 def render_workspace_page() -> None:
+    prepare_onboarding_page()
     render_workspace_topbar()
     render_sidebar()
     df_main, _ = load_active_database()
     render_main_area(df_main)
+    if (
+        not st.session_state.get("onboarding_prompt_shown")
+        and not st.session_state.get("onboarding_completed")
+        and not st.session_state.get("onboarding_active")
+    ):
+        clear_onboarding_highlight()
+        render_onboarding_prompt()
+    else:
+        render_onboarding_tour()
 
 
 def render_standalone_profile_route() -> None:
