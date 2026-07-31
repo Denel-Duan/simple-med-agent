@@ -8346,17 +8346,11 @@ def render_home_page(df_main: Optional[pd.DataFrame]) -> None:
         ("🧪", "实验小助手", "面向沉淀、粒径异常、PDI偏高、包封率低等实验问题，提供诊断与SOP辅助。", "实验小助手"),
     ]
 
-    rows = [cards[:3], cards[3:]]
+    rows = [cards[:2], cards[2:]]
     idx = 0
     for row in rows:
-        cols = st.columns(3, gap="large")
-        for col_idx, col in enumerate(cols):
-            if col_idx >= len(row):
-                with col:
-                    st.markdown("<div style='height: 286px;'></div>", unsafe_allow_html=True)
-                continue
-
-            icon, title, desc, page = row[col_idx]
+        cols = st.columns(2, gap="large")
+        for col, (icon, title, desc, page) in zip(cols, row):
             with col:
                 st.markdown(
                     f"""
