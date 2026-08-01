@@ -6011,10 +6011,10 @@ def render_login_page() -> None:
     st.caption("使用 Supabase Auth 登录后进入功能工作台。")
     email = st.text_input("邮箱", key="login_email_input")
     password = st.text_input(
-        "??",
+        "密码",
         type="password",
-        placeholder="???6???",
-        help="???6???",
+        placeholder="请输入 6 位数字密码",
+        help="密码应为 6 位数字。",
         key="login_password_input",
     )
     c1, c2, c3 = st.columns(3)
@@ -6043,17 +6043,17 @@ def render_register_page() -> None:
     display_name = st.text_input("显示名称", key="register_display_name_input")
     email = st.text_input("邮箱", key="register_email_input")
     password = st.text_input(
-        "??",
+        "密码",
         type="password",
-        placeholder="???6???",
-        help="???6???",
+        placeholder="请设置 6 位数字密码",
+        help="密码应为 6 位数字。",
         key="register_password_input",
     )
     password2 = st.text_input(
-        "????",
+        "确认密码",
         type="password",
-        placeholder="?????6???",
-        help="???6???",
+        placeholder="请再次输入 6 位数字密码",
+        help="请再次输入相同的 6 位数字密码。",
         key="register_password_confirm_input",
     )
     c1, c2, c3 = st.columns(3)
